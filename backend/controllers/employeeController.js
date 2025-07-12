@@ -5,19 +5,24 @@ const path = require('path');
 
 // Helper to generate EMPXXX IDs
 const generateNextEmployeeId = async () => {
-  const result = await query(`
-    SELECT employeeId FROM employees 
-    WHERE employeeId LIKE 'EMP%' 
-    ORDER BY LENGTH(employeeId) DESC, employeeId DESC 
-    LIMIT 1
-  `);
-  
-  if (result.length === 0) return 'EMP001';
-  
-  const lastId = result[0].employeeId;
-  const lastNumber = parseInt(lastId.slice(3));
-  const nextNumber = lastNumber + 1;
-  return `EMP${nextNumber.toString().padStart(3, '0')}`;
+  try {
+    const result = await query(`
+      SELECT employeeId FROM employees 
+      WHERE employeeId LIKE 'EMP%' 
+      ORDER BY CAST(SUBSTRING(employeeId, 4) AS UNSIGNED) DESC 
+      LIMIT 1
+    `);
+    
+    if (result.length === 0) return 'EMP001';
+    
+    const lastId = result[0].employeeId;
+    const lastNumber = parseInt(lastId.slice(3));
+    const nextNumber = lastNumber + 1;
+    return `EMP${nextNumber.toString().padStart(3, '0')}`;
+  } catch (error) {
+    console.error('Error generating employee ID:', error);
+    return 'EMP001';
+  }
 };
 
 // All controller methods
@@ -40,24 +45,16 @@ module.exports = {
     }
   },
 
-// In employeeController.js
-getNextEmployeeId: async (req, res) => {
-  try {
-    const result = await query(`
-      SELECT employeeId FROM employees 
-      WHERE employeeId LIKE 'EMP%' 
-      ORDER BY LENGTH(employeeId) DESC, employeeId DESC 
-      LIMIT 1
-    `);
-    
-    const lastId = result[0]?.employeeId || 'EMP000';
-    const lastNumber = parseInt(lastId.slice(3));
-    const nextNumber = lastNumber + 1;
-    res.json({ nextEmployeeId: `EMP${nextNumber.toString().padStart(3, '0')}` });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-},
+  // Get next available employee ID
+  getNextEmployeeId: async (req, res) => {
+    try {
+      const nextId = await generateNextEmployeeId();
+      res.json({ nextEmployeeId: nextId });
+    } catch (err) {
+      console.error('Error generating next employee ID:', err);
+      res.status(500).json({ error: err.message });
+    }
+  },
 
   getOfficePositionData: async (req, res) => {
     try {
@@ -149,6 +146,7 @@ getNextEmployeeId: async (req, res) => {
     }
   },
 
+  // Get positions filtered by office
   getPositionsByOffice: async (req, res) => {
     try {
       const { officeId } = req.params;
@@ -169,6 +167,8 @@ getNextEmployeeId: async (req, res) => {
   createEmployee: async (req, res) => {
     try {
       const { name, email, office_id, position_id, monthlySalary, joiningDate, status } = req.body;
+      
+      // Auto-generate employee ID
       const employeeId = await generateNextEmployeeId();
       
       await query(`

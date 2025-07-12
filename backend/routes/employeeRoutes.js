@@ -15,6 +15,7 @@ router.get('/summary-by-office', employeeController.getSummaryByOffice);
 // Office/position dropdown options
 router.get('/offices/options', employeeController.getOfficeOptions);
 router.get('/positions/options', employeeController.getPositionOptions);
+router.get('/positions/by-office/:officeId', employeeController.getPositionsByOffice);
 
 // Employee CRUD operations
 router.post('/', employeeController.createEmployee);

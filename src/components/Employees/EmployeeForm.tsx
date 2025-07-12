@@ -27,7 +27,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
   viewOnly = false,
 }) => {
   const [offices, setOffices] = useState<Office[]>([]);
-  const [positions, setPositions] = useState<Position[]>([]);
+  const [allPositions, setAllPositions] = useState<Position[]>([]);
+  const [filteredPositions, setFilteredPositions] = useState<Position[]>([]);
   const [isGeneratingId, setIsGeneratingId] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [reportingTime, setReportingTime] = useState<string>('Select office and position');
@@ -90,8 +91,16 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
           fetch('/api/employees/positions/options', { headers: getAuthHeaders() }),
         ]);
 
-        if (officesRes.ok) setOffices(await officesRes.json());
-        if (positionsRes.ok) setPositions(await positionsRes.json());
+        if (officesRes.ok) {
+          const officesData = await officesRes.json();
+          setOffices(officesData);
+        }
+        
+        if (positionsRes.ok) {
+          const positionsData = await positionsRes.json();
+          setAllPositions(positionsData);
+          setFilteredPositions(positionsData); // Initially show all positions
+        }
 
         if (employee) {
           reset({
@@ -102,6 +111,11 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
           
           setReportingTime(employee.reporting_time?.toString() || 'Not set');
           setDutyHours(formatDutyHours(employee.duty_hours));
+          
+          // If editing, filter positions for the selected office
+          if (employee.office_id) {
+            await fetchPositionsForOffice(employee.office_id);
+          }
         } else if (!viewOnly) {
           await generateEmployeeId();
         }
@@ -115,9 +129,27 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
     fetchOptions();
   }, [employee, viewOnly, reset]);
 
+  // Fetch positions when office changes
+  useEffect(() => {
+    if (officeId && officeId !== 0) {
+      fetchPositionsForOffice(officeId);
+      // Reset position when office changes (unless we're loading an existing employee)
+      if (!employee || employee.office_id !== officeId) {
+        setValue('position_id', 0);
+        setReportingTime('Select position');
+        setDutyHours('Select position');
+      }
+    } else {
+      setFilteredPositions(allPositions);
+      setReportingTime('Select office and position');
+      setDutyHours('Select office and position');
+    }
+  }, [officeId, allPositions, employee, setValue]);
+
+  // Fetch office-position data when both office and position are selected
   useEffect(() => {
     const fetchOfficePositionData = async () => {
-      if (officeId && positionId) {
+      if (officeId && positionId && officeId !== 0 && positionId !== 0) {
         try {
           const response = await fetch(`/api/employees/office-position/${officeId}/${positionId}`, {
             headers: getAuthHeaders(),
@@ -135,14 +167,29 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
           setReportingTime('Error loading data');
           setDutyHours('Error loading data');
         }
-      } else {
-        setReportingTime('Select office and position');
-        setDutyHours('Select office and position');
       }
     };
 
     fetchOfficePositionData();
   }, [officeId, positionId]);
+
+  const fetchPositionsForOffice = async (selectedOfficeId: number) => {
+    try {
+      const response = await fetch(`/api/employees/positions/by-office/${selectedOfficeId}`, {
+        headers: getAuthHeaders(),
+      });
+      if (response.ok) {
+        const positionsData = await response.json();
+        setFilteredPositions(positionsData);
+      } else {
+        console.error('Failed to fetch positions for office');
+        setFilteredPositions([]);
+      }
+    } catch (error) {
+      console.error('Error fetching positions for office:', error);
+      setFilteredPositions([]);
+    }
+  };
 
   const generateEmployeeId = async () => {
     setIsGeneratingId(true);
@@ -155,11 +202,11 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
         setValue('employeeId', data.nextEmployeeId);
       } else {
         console.error('Failed to generate employee ID');
-        setValue('employeeId', 'EMP000');
+        setValue('employeeId', 'EMP001');
       }
     } catch (error) {
       console.error('Error generating ID:', error);
-      setValue('employeeId', 'EMP000');
+      setValue('employeeId', 'EMP001');
     } finally {
       setIsGeneratingId(false);
     }
@@ -167,7 +214,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
 
   const handleFormSubmit = (formData: Employee) => {
     const office = offices.find(o => o.id === formData.office_id);
-    const position = positions.find(p => p.id === formData.position_id);
+    const position = filteredPositions.find(p => p.id === formData.position_id);
     
     const parseDutyHours = (hoursStr: string): number | undefined => {
       if (!hoursStr || hoursStr === 'Not set' || hoursStr === 'Select office and position') {
@@ -294,11 +341,14 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Office</label>
               <select
-                {...register('office_id', { required: 'Office is required' })}
+                {...register('office_id', { 
+                  required: 'Office is required',
+                  validate: value => value !== 0 || 'Please select an office'
+                })}
                 disabled={viewOnly}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2"
               >
-                <option value="">Select Office</option>
+                <option value={0}>Select Office</option>
                 {offices.map((office) => (
                   <option key={office.id} value={office.id}>
                     {office.name}
@@ -313,12 +363,17 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
               <select
-                {...register('position_id', { required: 'Position is required' })}
-                disabled={viewOnly}
+                {...register('position_id', { 
+                  required: 'Position is required',
+                  validate: value => value !== 0 || 'Please select a position'
+                })}
+                disabled={viewOnly || !officeId || officeId === 0}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2"
               >
-                <option value="">Select Position</option>
-                {positions.map((position) => (
+                <option value={0}>
+                  {!officeId || officeId === 0 ? 'Select office first' : 'Select Position'}
+                </option>
+                {filteredPositions.map((position) => (
                   <option key={position.id} value={position.id}>
                     {position.title}
                   </option>
@@ -326,6 +381,9 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
               </select>
               {errors.position_id && (
                 <p className="text-red-500 text-sm mt-1">{errors.position_id.message}</p>
+              )}
+              {officeId && officeId !== 0 && filteredPositions.length === 0 && (
+                <p className="text-amber-600 text-sm mt-1">No positions available for this office</p>
               )}
             </div>
 
