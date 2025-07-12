@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payroll Management System</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Payroll Management System</h1>
+            <nav>
+                <ul>
+                    <li><a href="#" id="dashboard-link">Dashboard</a></li>
+                    <li><a href="#" id="employees-link">Employees</a></li>
+                    <li><a href="#" id="import-sample-link">Import/Sample Data</a></li>
+                </ul>
+            </nav>
+        </header>
+        <main>
+            <section id="dashboard" class="hidden">
+                <h2>Dashboard</h2>
+                <p>Total Employees: <span id="total-employees"></span></p>
+                <p>Active Employees: <span id="active-employees"></span></p>
+                <p>Total Payroll: $<span id="total-payroll"></span></p>
+                <p>Average Salary: $<span id="avg-salary"></span></p>
+            </section>
+            <section id="employees" class="hidden">
+                <h2>Employee List</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Department</th>
+                            <th>Position</th>
+                            <th>Hire Date</th>
+                            <th>Salary</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employee-table-body">
+                        <!-- Dynamically loaded employee data will go here -->
+                    </tbody>
+                </table>
+            </section>
+            <section id="import-sample" class="hidden">
+                <h2>Import / Sample Data</h2>
+                <form id="import-form" enctype="multipart/form-data">
+                    <label for="file">Upload Employee Data (Excel/CSV):</label>
+                    <input type="file" id="file" name="file" accept=".csv, .xlsx">
+                    <button type="submit">Import</button>
+                </form>
+                <button id="generate-sample-data">Generate Sample Data</button>
+            </section>
+        </main>
+        <footer>
+            <p>&copy; 2025 Payroll Management System</p>
+        </footer>
+    </div>
+    <script src="scripts.js"></script>
+</body>
+</html>
+
