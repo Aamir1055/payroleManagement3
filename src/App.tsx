@@ -8,7 +8,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Employees } from './pages/Employees';
 import { Payroll } from './pages/Payroll';
 import { Reports } from './pages/Reports';
-import { Holidays } from './pages/Holidays';
+import { Holidays } from './pages/holidays';
 import { Profile } from './pages/Profile';
 import AttendanceUpload from './pages/AttendanceUpload';
 
