@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, RefreshCw } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Employee } from '../../types';
 
 interface Office {
@@ -15,7 +15,7 @@ interface Position {
 
 interface EmployeeFormProps {
   employee?: Employee;
-  onSubmit?: (data: Employee) => void;
+  onSubmit?: (data: any) => void;
   onClose: () => void;
   viewOnly?: boolean;
 }
@@ -29,7 +29,6 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
   const [offices, setOffices] = useState<Office[]>([]);
   const [allPositions, setAllPositions] = useState<Position[]>([]);
   const [filteredPositions, setFilteredPositions] = useState<Position[]>([]);
-  const [isGeneratingId, setIsGeneratingId] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [reportingTime, setReportingTime] = useState<string>('Select office and position');
   const [dutyHours, setDutyHours] = useState<string>('Select office and position');
@@ -43,18 +42,18 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
     watch,
   } = useForm<Employee>({
     defaultValues: {
-      id: 0,
+      id: undefined,
       employeeId: '',
       name: '',
       email: '',
       office_id: 0,
       office_name: '',
       position_id: 0,
-      position_title: '',
+      position_name: '',
       monthlySalary: 0,
       joiningDate: '',
-      status: true
-    }
+      status: true,
+    },
   });
 
   const statusValue = watch('status');
@@ -65,21 +64,14 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
     const token = localStorage.getItem('token');
     return {
       'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : '',
+      Authorization: token ? `Bearer ${token}` : '',
     };
   };
 
   const formatDutyHours = (hours: unknown): string => {
     if (hours === undefined || hours === null) return 'Not set';
-    
-    if (typeof hours === 'number') {
-      return `${hours} hours`;
-    }
-    
-    if (typeof hours === 'string') {
-      return hours.includes('hours') ? hours : `${hours} hours`;
-    }
-
+    if (typeof hours === 'number') return `${hours} hours`;
+    if (typeof hours === 'string') return hours.includes('hours') ? hours : `${hours} hours`;
     return 'Not set';
   };
 
@@ -91,33 +83,43 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
           fetch('/api/employees/positions/options', { headers: getAuthHeaders() }),
         ]);
 
+        let officesData: Office[] = [];
+        let positionsData: Position[] = [];
+
         if (officesRes.ok) {
-          const officesData = await officesRes.json();
+          officesData = await officesRes.json();
           setOffices(officesData);
         }
-        
+
         if (positionsRes.ok) {
-          const positionsData = await positionsRes.json();
+          positionsData = await positionsRes.json();
           setAllPositions(positionsData);
-          setFilteredPositions(positionsData); // Initially show all positions
+          setFilteredPositions(positionsData);
         }
 
         if (employee) {
+          const officeObj = officesData.find(o => o.name === employee.office_name);
+          const positionObj = positionsData.find(p =>
+            p.title === (employee.position_name || employee.position_title)
+          );
+
           reset({
             ...employee,
-            joiningDate: employee.joiningDate.split('T')[0],
-            status: employee.status ?? true
+            office_id: officeObj?.id ?? 0,
+            position_id: positionObj?.id ?? 0,
+            position_name: employee.position_name || employee.position_title || '',
+            joiningDate: employee.joiningDate?.split('T')[0],
+            status: employee.status, // ✅ already a boolean
           });
-          
+
           setReportingTime(employee.reporting_time?.toString() || 'Not set');
           setDutyHours(formatDutyHours(employee.duty_hours));
-          
-          // If editing, filter positions for the selected office
-          if (employee.office_id) {
-            await fetchPositionsForOffice(employee.office_id);
+
+          if (officeObj?.id) {
+            await fetchPositionsForOffice(officeObj.id);
           }
-        } else if (!viewOnly) {
-          await generateEmployeeId();
+        } else {
+          reset(); // New form
         }
       } catch (error) {
         console.error('Error fetching options:', error);
@@ -129,11 +131,9 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
     fetchOptions();
   }, [employee, viewOnly, reset]);
 
-  // Fetch positions when office changes
   useEffect(() => {
     if (officeId && officeId !== 0) {
       fetchPositionsForOffice(officeId);
-      // Reset position when office changes (unless we're loading an existing employee)
       if (!employee || employee.office_id !== officeId) {
         setValue('position_id', 0);
         setReportingTime('Select position');
@@ -146,7 +146,6 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
     }
   }, [officeId, allPositions, employee, setValue]);
 
-  // Fetch office-position data when both office and position are selected
   useEffect(() => {
     const fetchOfficePositionData = async () => {
       if (officeId && positionId && officeId !== 0 && positionId !== 0) {
@@ -182,7 +181,6 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
         const positionsData = await response.json();
         setFilteredPositions(positionsData);
       } else {
-        console.error('Failed to fetch positions for office');
         setFilteredPositions([]);
       }
     } catch (error) {
@@ -191,51 +189,27 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
     }
   };
 
-  const generateEmployeeId = async () => {
-    setIsGeneratingId(true);
+  const handleFormSubmit = (formData: Employee) => {
     try {
-      const response = await fetch('/api/employees/next-id', {
-        headers: getAuthHeaders(),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setValue('employeeId', data.nextEmployeeId);
-      } else {
-        console.error('Failed to generate employee ID');
-        setValue('employeeId', 'EMP001');
+      const office = offices.find(o => String(o.id) === String(formData.office_id));
+      const position = filteredPositions.find(p => String(p.id) === String(formData.position_id));
+
+      const completeEmployeeData: any = {
+        employeeId: formData.employeeId,
+        name: formData.name,
+        email: formData.email,
+        office_name: office?.name || '',
+        position_name: position?.title || '',
+        monthlySalary: formData.monthlySalary,
+        joiningDate: formData.joiningDate ? new Date(formData.joiningDate).toISOString().split('T')[0] : '',
+        status: formData.status ? 1 : 0, // ✅ Convert boolean to 1/0
+      };
+
+      if (onSubmit) {
+        onSubmit(completeEmployeeData);
       }
     } catch (error) {
-      console.error('Error generating ID:', error);
-      setValue('employeeId', 'EMP001');
-    } finally {
-      setIsGeneratingId(false);
-    }
-  };
-
-  const handleFormSubmit = (formData: Employee) => {
-    const office = offices.find(o => o.id === formData.office_id);
-    const position = filteredPositions.find(p => p.id === formData.position_id);
-    
-    const parseDutyHours = (hoursStr: string): number | undefined => {
-      if (!hoursStr || hoursStr === 'Not set' || hoursStr === 'Select office and position') {
-        return undefined;
-      }
-      const numericValue = parseFloat(hoursStr.replace(' hours', ''));
-      return isNaN(numericValue) ? undefined : numericValue;
-    };
-
-    const completeEmployeeData: Employee = {
-      ...formData,
-      office_name: office?.name || '',
-      position_title: position?.title || '',
-      joiningDate: formData.joiningDate ? new Date(formData.joiningDate).toISOString() : '',
-      status: formData.status ?? true,
-      reporting_time: reportingTime === 'Not set' ? undefined : reportingTime,
-      duty_hours: parseDutyHours(dutyHours)
-    };
-
-    if (onSubmit) {
-      onSubmit(completeEmployeeData);
+      console.error('Error in handleFormSubmit:', error);
     }
   };
 
@@ -258,181 +232,158 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
           <h2 className="text-xl font-semibold text-gray-900">
             {viewOnly ? 'View Employee' : employee ? 'Edit Employee' : 'Add Employee'}
           </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit(handleFormSubmit)} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Employee ID
-                {!employee && !viewOnly && (
-                  <button
-                    type="button"
-                    onClick={generateEmployeeId}
-                    disabled={isGeneratingId}
-                    className="ml-2 text-blue-600 hover:text-blue-800 text-xs"
-                  >
-                    <RefreshCw className={`w-3 h-3 inline ${isGeneratingId ? 'animate-spin' : ''}`} />
-                    {isGeneratingId ? 'Generating...' : 'Regenerate'}
-                  </button>
-                )}
-              </label>
-              <input
-                {...register('employeeId', { required: 'Employee ID is required' })}
-                disabled
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100"
-              />
-              {errors.employeeId && (
-                <p className="text-red-500 text-sm mt-1">{errors.employeeId.message}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-              <input
-                {...register('name', { required: 'Name is required' })}
-                disabled={viewOnly}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              />
-              {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                type="email"
-                {...register('email', { 
-                  required: 'Email is required',
-                  pattern: {
-                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                    message: 'Invalid email address'
-                  }
-                })}
-                disabled={viewOnly}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              />
-              {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary</label>
-              <input
-                type="number"
-                {...register('monthlySalary', { 
-                  required: 'Salary is required',
-                  min: { value: 0, message: 'Salary must be positive' }
-                })}
-                disabled={viewOnly}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              />
-              {errors.monthlySalary && (
-                <p className="text-red-500 text-sm mt-1">{errors.monthlySalary.message}</p>
-              )}
-            </div>
+          {/* Employee ID */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
+            <input
+              {...register('employeeId', { required: 'Employee ID is required' })}
+              disabled={viewOnly}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white-100"
+            />
+            {errors.employeeId && <p className="text-red-500 text-sm mt-1">{errors.employeeId.message}</p>}
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Office</label>
-              <select
-                {...register('office_id', { 
-                  required: 'Office is required',
-                  validate: value => value !== 0 || 'Please select an office'
-                })}
-                disabled={viewOnly}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              >
-                <option value={0}>Select Office</option>
-                {offices.map((office) => (
-                  <option key={office.id} value={office.id}>
-                    {office.name}
-                  </option>
-                ))}
-              </select>
-              {errors.office_id && (
-                <p className="text-red-500 text-sm mt-1">{errors.office_id.message}</p>
-              )}
-            </div>
+          {/* Name */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <input
+              {...register('name', { required: 'Name is required' })}
+              disabled={viewOnly}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+            />
+            {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>}
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
-              <select
-                {...register('position_id', { 
-                  required: 'Position is required',
-                  validate: value => value !== 0 || 'Please select a position'
-                })}
-                disabled={viewOnly || !officeId || officeId === 0}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              >
-                <option value={0}>
-                  {!officeId || officeId === 0 ? 'Select office first' : 'Select Position'}
+          {/* Email */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              {...register('email', {
+                required: 'Email is required',
+                pattern: {
+                  value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                  message: 'Invalid email address',
+                },
+              })}
+              disabled={viewOnly}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+            />
+            {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>}
+          </div>
+
+          {/* Monthly Salary */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary</label>
+            <input
+              type="number"
+              {...register('monthlySalary', {
+                required: 'Salary is required',
+                min: { value: 0, message: 'Salary must be positive' },
+              })}
+              disabled={viewOnly}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+            />
+            {errors.monthlySalary && <p className="text-red-500 text-sm mt-1">{errors.monthlySalary.message}</p>}
+          </div>
+
+          {/* Office */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Office</label>
+            <select
+              {...register('office_id', {
+                required: 'Office is required',
+                validate: value => value !== 0 || 'Please select an office',
+              })}
+              disabled={viewOnly}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+            >
+              <option value={0}>Select Office</option>
+              {offices.map(office => (
+                <option key={office.id} value={office.id}>
+                  {office.name}
                 </option>
-                {filteredPositions.map((position) => (
-                  <option key={position.id} value={position.id}>
-                    {position.title}
-                  </option>
-                ))}
-              </select>
-              {errors.position_id && (
-                <p className="text-red-500 text-sm mt-1">{errors.position_id.message}</p>
-              )}
-              {officeId && officeId !== 0 && filteredPositions.length === 0 && (
-                <p className="text-amber-600 text-sm mt-1">No positions available for this office</p>
-              )}
-            </div>
+              ))}
+            </select>
+            {errors.office_id && <p className="text-red-500 text-sm mt-1">{errors.office_id.message}</p>}
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Joining Date</label>
-              <input
-                type="date"
-                {...register('joiningDate', { required: 'Joining date is required' })}
-                disabled={viewOnly}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              />
-              {errors.joiningDate && (
-                <p className="text-red-500 text-sm mt-1">{errors.joiningDate.message}</p>
-              )}
-            </div>
+          {/* Position */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
+            <select
+              {...register('position_id', {
+                required: 'Position is required',
+                validate: value => value !== 0 || 'Please select a position',
+              })}
+              disabled={viewOnly || !officeId}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+            >
+              <option value={0}>
+                {!officeId ? 'Select office first' : 'Select Position'}
+              </option>
+              {filteredPositions.map(position => (
+                <option key={position.id} value={position.id}>
+                  {position.title}
+                </option>
+              ))}
+            </select>
+            {errors.position_id && <p className="text-red-500 text-sm mt-1">{errors.position_id.message}</p>}
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select
-                {...register('status')}
-                disabled={viewOnly}
-                value={statusValue ? 'true' : 'false'}
-                onChange={(e) => setValue('status', e.target.value === 'true')}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              >
-                <option value="true">Active</option>
-                <option value="false">Inactive</option>
-              </select>
-            </div>
+          {/* Joining Date */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Joining Date</label>
+            <input
+              type="date"
+              {...register('joiningDate', { required: 'Joining date is required' })}
+              disabled={viewOnly}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+            />
+            {errors.joiningDate && <p className="text-red-500 text-sm mt-1">{errors.joiningDate.message}</p>}
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Reporting Time</label>
-              <input
-                type="text"
-                value={reportingTime}
-                disabled
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100"
-              />
-            </div>
+          {/* Status */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select
+              {...register('status')}
+              disabled={viewOnly}
+              value={statusValue ? 'true' : 'false'}
+              onChange={(e) => setValue('status', e.target.value === 'true')}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+            >
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </select>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Duty Hours</label>
-              <input
-                type="text"
-                value={dutyHours}
-                disabled
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100"
-              />
-            </div>
+          {/* Reporting Time */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reporting Time</label>
+            <input
+              type="text"
+              value={reportingTime}
+              disabled
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100"
+            />
+          </div>
+
+          {/* Duty Hours */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Duty Hours</label>
+            <input
+              type="text"
+              value={dutyHours}
+              disabled
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100"
+            />
           </div>
 
           {!viewOnly && (

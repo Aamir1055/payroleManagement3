@@ -42,11 +42,11 @@ exports.generatePayrollReport = async (req, res) => {
 
     const sql = `
       SELECT 
-        e.employee_id,
+        e.employeeId,
         e.name,
         o.name as office,
         p.title as position,
-        e.salary as monthlySalary,
+        e.monthlySalary as monthlySalary,
         op.duty_hours as dutyHours,
         op.reporting_time as reportingTime,
         3 as allowedLateDays,
@@ -59,11 +59,11 @@ exports.generatePayrollReport = async (req, res) => {
       LEFT JOIN Offices o ON e.office_id = o.id
       LEFT JOIN Positions p ON e.position_id = p.id
       LEFT JOIN OfficePositions op ON e.office_id = op.office_id AND e.position_id = op.position_id
-      LEFT JOIN Attendance a ON e.employee_id = a.employee_id 
+      LEFT JOIN Attendance a ON e.employeeId= a.employee_id 
         AND a.date BETWEEN ? AND ?
-        AND a.status IN ('present', 'late')
+        
       WHERE e.status = 1
-      GROUP BY e.employee_id
+      GROUP BY e.employeeId
     `;
 
     const [rows] = await db.query(sql, [startDate, endDate]);

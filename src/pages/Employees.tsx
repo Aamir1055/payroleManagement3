@@ -4,9 +4,16 @@ import { MainLayout } from '../components/Layout/MainLayout';
 import { EmployeeTable } from '../components/Employees/EmployeeTable';
 import EmployeeForm from '../components/Employees/EmployeeForm';
 import { useEmployees } from '../hooks/useEmployees';
-import { Plus, Filter, Download, Users, Upload, XCircle } from 'lucide-react';
+import { Plus, Download, Users, Upload, XCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+
+// Helper to safely extract a string from possible object/string
+const getDisplayName = (item: any, nameKey: string = 'name', fallbackKey?: string): string => {
+  if (typeof item === 'object' && item?.[nameKey]) return item[nameKey];
+  if (typeof item === 'object' && fallbackKey && item?.[fallbackKey]) return item[fallbackKey];
+  return String(item);
+};
 
 export const Employees: React.FC = () => {
   const {
@@ -23,65 +30,29 @@ export const Employees: React.FC = () => {
   const [viewOnly, setViewOnly] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedOffice, setSelectedOffice] = useState('');
-  const [selectedPosition, setSelectedPosition] = useState('');
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
-  const [masterOffices, setMasterOffices] = useState<string[]>([]);
-  const [masterPositions, setMasterPositions] = useState<string[]>([]);
 
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : ''
-    };
-  };
+  // NORMALIZE employee data: ensure office_name is always a string
+  const normalizedEmployees = employees.map((emp) => ({
+    ...emp,
+    office_name: emp.office_name || '',
+  }));
 
-  useEffect(() => {
-    const fetchMasterData = async () => {
-      try {
-        const [officesRes, positionsRes] = await Promise.all([
-          fetch('/api/masters/offices', { headers: getAuthHeaders() }),
-          fetch('/api/masters/positions', { headers: getAuthHeaders() }),
-        ]);
+  // FILTER LOGIC: Search by name, ID, office, email, salary, status
+  // POSITION and JOINING DATE REMOVED FROM SEARCH
+  const filteredEmployees = normalizedEmployees.filter((employee) => {
+    const search = searchTerm.trim().toLowerCase();
+    const fieldsToSearch = [
+      employee.name || '',
+      employee.employeeId || '',
+      getDisplayName(employee.office_name, 'name', 'office_name'),
+      employee.email || '',
+      String(employee.monthlySalary || ''),
+      employee.status ? 'Active' : 'Inactive',
+    ].map(f => String(f).trim().toLowerCase());
 
-        const officesData = await officesRes.json();
-        const positionsData = await positionsRes.json();
-
-        const safeOffices = officesData.map((o: any) =>
-          typeof o === 'object' && o.name ? o.name : String(o)
-        );
-        const safePositions = positionsData.map((p: any) =>
-          typeof p === 'object' && p.title ? p.title : String(p)
-        );
-
-        setMasterOffices(safeOffices.length > 0 ? safeOffices : ['Main Office']);
-        setMasterPositions(safePositions.length > 0 ? safePositions : ['Employee']);
-      } catch (error) {
-        console.error('Failed to fetch master data', error);
-      }
-    };
-    fetchMasterData();
-  }, []);
-
-  const fallbackOffices = [...new Set(employees.map((emp) => emp.office_name || ''))].filter(Boolean);
-  const fallbackPositions = [...new Set(employees.map((emp) => emp.position_title || ''))].filter(Boolean);
-
-  const officesToUse = masterOffices.length > 0 ? masterOffices : fallbackOffices.length > 0 ? fallbackOffices : ['Main Office'];
-  const positionsToUse = masterPositions.length > 0 ? masterPositions : fallbackPositions.length > 0 ? fallbackPositions : ['Employee'];
-
-  const filteredEmployees = employees.filter((employee) => {
-    const search = searchTerm.toLowerCase();
-    const matchesSearch =
-      (employee.name?.toLowerCase().includes(search)) ||
-      (employee.employeeId?.toLowerCase().includes(search)) ||
-      (employee.position_title?.toLowerCase().includes(search));
-
-    const matchesOffice = selectedOffice === '' || employee.office_name === selectedOffice;
-    const matchesPosition = selectedPosition === '' || employee.position_title === selectedPosition;
-
-    return matchesSearch && matchesOffice && matchesPosition;
+    return fieldsToSearch.some(field => field.includes(search));
   });
 
   const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
@@ -111,10 +82,8 @@ export const Employees: React.FC = () => {
       'Employee ID': emp.employeeId,
       'Name': emp.name,
       'Email': emp.email,
-      'Office': emp.office_name,
-      'Position': emp.position_title,
+      'Office': getDisplayName(emp.office_name, 'name', 'office_name'),
       'Monthly Salary (AED)': Number(emp.monthlySalary).toFixed(2),
-      'Joining Date': emp.joiningDate,
       'Status': emp.status ? 'Active' : 'Inactive',
     }));
 
@@ -129,13 +98,11 @@ export const Employees: React.FC = () => {
   const handleDownloadSampleExcel = () => {
     const sampleData = [
       {
-        'Employee ID': 'EMP001',
+        'Employee ID': 'EMP0021',
         'Name': 'John Doe',
         'Email': 'john@example.com',
-        'Office': officesToUse[0] || 'Main Office',
-        'Position': positionsToUse[0] || 'Employee',
-        'Monthly Salary (AED)': 5000,
-        'Joining Date': '2023-01-01',
+        'Office Name': 'Taqniya',
+        'Salary': 2000,
         'Status': 'active',
       }
     ];
@@ -155,9 +122,9 @@ export const Employees: React.FC = () => {
       name: '',
       email: '',
       office_id: 0,
-      office_name: officesToUse[0] || '',
+      office_name: '',
       position_id: 0,
-      position_title: positionsToUse[0] || '',
+      position_name: '',
       monthlySalary: 0,
       joiningDate: new Date().toISOString().split('T')[0],
       status: true
@@ -169,8 +136,7 @@ export const Employees: React.FC = () => {
   const handleEditEmployee = (employee: Employee) => {
     setEditingEmployee({
       ...employee,
-      office_name: employee.office_name || officesToUse[0] || '',
-      position_title: employee.position_title || positionsToUse[0] || ''
+      office_name: employee.office_name || '',
     });
     setViewOnly(false);
     setShowForm(true);
@@ -179,29 +145,35 @@ export const Employees: React.FC = () => {
   const handleViewEmployee = (employee: Employee) => {
     setEditingEmployee({
       ...employee,
-      office_name: employee.office_name || officesToUse[0] || '',
-      position_title: employee.position_title || positionsToUse[0] || ''
+      office_name: employee.office_name || '',
     });
     setViewOnly(true);
     setShowForm(true);
   };
 
-  const handleSubmitEmployee = async (data: Employee) => {
-    if (!data.office_id || !data.position_id) {
+  const handleSubmitEmployee = async (data: any) => {
+    if (!data.office_name || !data.position_name) {
       alert('Office and Position are required fields');
       return;
     }
-    
+    if (!data.employeeId || data.employeeId.trim() === '') {
+      alert('Employee ID is required');
+      return;
+    }
+
     try {
-      if (editingEmployee) {
+      if (editingEmployee && editingEmployee.id !== 0) {
         await updateEmployee(editingEmployee.employeeId, data);
       } else {
         await addEmployee(data);
       }
       setShowForm(false);
       setEditingEmployee(null);
-    } catch (error) {
-      console.error('Error saving employee:', error);
+    } catch (err) {
+      let message = 'Failed to save employee';
+      if (err instanceof Error) message += ': ' + err.message;
+      else message += ': ' + String(err);
+      alert(message);
     }
   };
 
@@ -223,7 +195,7 @@ export const Employees: React.FC = () => {
     formData.append('file', file);
 
     try {
-      const response = await fetch('/employees/import', {
+      const response = await fetch('/api/employees/import', {
         method: 'POST',
         body: formData,
         headers: {
@@ -238,7 +210,10 @@ export const Employees: React.FC = () => {
         throw new Error('Failed to import employees');
       }
     } catch (err) {
-      alert(`Import error: ${(err as Error).message}`);
+      let message = 'Import error';
+      if (err instanceof Error) message += ': ' + err.message;
+      else message += ': ' + String(err);
+      alert(message);
     }
   };
 
@@ -282,52 +257,14 @@ export const Employees: React.FC = () => {
           <div className="flex items-center space-x-4">
             <input
               type="text"
-              placeholder="Search by name, ID, or position..."
+              placeholder="Search by name, ID, office, email, salary, or status..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
+              className="pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-96"
             />
-
-            <div className="relative">
-              <select
-                value={selectedOffice}
-                onChange={(e) => {
-                  setSelectedOffice(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="pl-4 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
-              >
-                <option value="">All Offices</option>
-                {officesToUse.map((office, idx) => (
-                  <option key={idx} value={String(office)}>
-                    {String(office)}
-                  </option>
-                ))}
-              </select>
-              <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
-            </div>
-
-            <div className="relative">
-              <select
-                value={selectedPosition}
-                onChange={(e) => {
-                  setSelectedPosition(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="pl-4 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
-              >
-                <option value="">All Positions</option>
-                {positionsToUse.map((position, idx) => (
-                  <option key={idx} value={String(position)}>
-                    {String(position)}
-                  </option>
-                ))}
-              </select>
-              <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
-            </div>
           </div>
 
           <div className="flex items-center space-x-3">
@@ -437,11 +374,11 @@ export const Employees: React.FC = () => {
             <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No employees found</h3>
             <p className="text-gray-500 mb-6">
-              {searchTerm || selectedOffice || selectedPosition
-                ? 'No employees match your current filters.'
+              {searchTerm
+                ? 'No employees match your search.'
                 : 'Get started by adding a new employee.'}
             </p>
-            {!searchTerm && !selectedOffice && !selectedPosition && (
+            {!searchTerm && (
               <button
                 onClick={handleAddEmployee}
                 className="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"

@@ -23,7 +23,8 @@ const navigation = [
   { name: 'Payroll', href: '/payroll', icon: DollarSign },
   { name: 'Reports', href: '/reports', icon: FileText },
   { name: 'Holidays', href: '/holidays', icon: Calendar },
-  { name: 'Profile', href: '/profile', icon: User }
+  { name: 'Profile', href: '/profile', icon: User },
+  { name: 'Attendance', href: '/attendance', icon: Calendar },
 ];
 
 interface SidebarProps {

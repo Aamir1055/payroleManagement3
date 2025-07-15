@@ -2,7 +2,17 @@ const express = require('express');
 const router = express.Router();
 const employeeController = require('../controllers/employeeController');
 const multer = require('multer');
+const path = require('path');
+
+// Setup multer to store files in uploads/
+//const upload = multer({ dest: 'uploads/' });
+
+// ✅ Import/export routes - PUT THEM AT THE TOP before dynamic ones
 const upload = multer({ dest: 'uploads/' });
+router.post('/import', upload.single('file'), employeeController.importEmployees);
+router.get('/template', employeeController.exportEmployeesTemplate);
+//router.get('/template/download', employeeController.exportEmployeesTemplate);
+//router.post('/import', upload.single('file'), employeeController.importEmployees);
 
 // Employee data routes
 router.get('/', employeeController.getEmployees);
@@ -17,14 +27,10 @@ router.get('/offices/options', employeeController.getOfficeOptions);
 router.get('/positions/options', employeeController.getPositionOptions);
 router.get('/positions/by-office/:officeId', employeeController.getPositionsByOffice);
 
-// Employee CRUD operations
+// ✅ Employee CRUD operations - PUT THESE AFTER STATIC ROUTES
 router.post('/', employeeController.createEmployee);
 router.get('/:employeeId', employeeController.getEmployeeById);
 router.put('/:employeeId', employeeController.updateEmployee);
 router.delete('/:employeeId', employeeController.deleteEmployee);
-
-// Import/export routes
-router.get('/template/download', employeeController.exportEmployeesTemplate);
-router.post('/import', upload.single('file'), employeeController.importEmployees);
 
 module.exports = router;

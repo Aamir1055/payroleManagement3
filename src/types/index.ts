@@ -6,12 +6,13 @@ export interface Employee {
   office_id: number;
   office_name: string;
   position_id: number;
-  position_title: string;
+  position_name: string;
   monthlySalary: number;
   joiningDate: string;
   status: boolean;
   reporting_time?: string;
   duty_hours?: number;
+  position_title?: string; // Optional, if not always present
 }
 
 export interface AttendanceRecord {

@@ -1,10 +1,10 @@
-// routes/payrollRoutes.js
-const express = require('express');
-const router = express.Router();
-const payrollController = require('../controllers/payrollController');
+// // routes/payrollRoutes.js
+// const express = require('express');
+// const router = express.Router();
+// const payrollController = require('../controllers/reportController');
 
-router.get('/report', payrollController.generatePayrollReport);
-router.get('/summary', payrollController.getPayrollSummary);
-router.post('/save', payrollController.savePayroll);
+// router.get('/report', payrollController.generatePayrollReport);
+// router.get('/summary', payrollController.getPayrollSummary);
+// router.post('/save', payrollController.savePayroll);
 
-module.exports = router;
+// module.exports = router;
