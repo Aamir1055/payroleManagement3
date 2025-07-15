@@ -134,7 +134,7 @@ const AppRoutes: React.FC = () => {
       <Route
         path="/attendance"
         element={
-          <AttendanceUpload onReportNavigate={() => window.location.href = '/reports'} />
+          <AttendanceUpload />
         }
       />
       <Route 
