@@ -28,7 +28,15 @@ module.exports = {
         LEFT JOIN office_positions op ON e.office_id = op.office_id AND e.position_id = op.position_id
         ORDER BY e.employeeId
       `);
-      res.json(employees);
+      
+      // Fix: Ensure consistent status format (boolean)
+      const processedEmployees = employees.map(emp => ({
+        ...emp,
+        status: emp.status === 1 || emp.status === true || emp.status === 'active',
+        position_name: emp.position_title // Ensure position_name is available
+      }));
+      
+      res.json(processedEmployees);
     } catch (err) {
       console.error('Error:', err);
       res.status(500).json({ error: 'Failed to fetch employees' });
@@ -154,11 +162,21 @@ module.exports = {
       const office_id = await getOfficeIdByName(office_name, db);
       const position_id = await getPositionIdByName(position_name, db);
 
+      // Fix: Handle status conversion properly
+      let statusValue = 1; // default active
+      if (typeof status === 'boolean') {
+        statusValue = status ? 1 : 0;
+      } else if (typeof status === 'string') {
+        statusValue = (status === 'true' || status.toLowerCase() === 'active') ? 1 : 0;
+      } else if (typeof status === 'number') {
+        statusValue = status;
+      }
+
       await db.query(`
         INSERT INTO employees 
         (employeeId, name, email, office_id, position_id, monthlySalary, joiningDate, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `, [employeeId, name, email, office_id, position_id, monthlySalary, joiningDate, status ? 1 : 0]);
+      `, [employeeId, name, email, office_id, position_id, monthlySalary, joiningDate, statusValue]);
 
       const [newEmployee] = await db.query(`
         SELECT e.*, o.name AS office_name, p.title AS position_title,
@@ -170,7 +188,12 @@ module.exports = {
         WHERE e.employeeId = ?
       `, [employeeId]);
 
-      res.status(201).json(newEmployee[0]);
+      // Fix: Return consistent format
+      const employee = newEmployee[0];
+      employee.status = employee.status === 1;
+      employee.position_name = employee.position_title;
+
+      res.status(201).json(employee);
     } catch (err) {
       console.error('Error:', err);
       res.status(500).json({ error: err.message });
@@ -189,9 +212,15 @@ module.exports = {
         WHERE e.employeeId = ?
       `, [req.params.employeeId]);
 
-      employee[0]
-        ? res.json(employee[0])
-        : res.status(404).json({ error: 'Employee not found' });
+      if (employee[0]) {
+        // Fix: Ensure consistent format
+        const emp = employee[0];
+        emp.status = emp.status === 1;
+        emp.position_name = emp.position_title;
+        res.json(emp);
+      } else {
+        res.status(404).json({ error: 'Employee not found' });
+      }
     } catch (err) {
       console.error('Error:', err);
       res.status(500).json({ error: err.message });
@@ -206,12 +235,22 @@ module.exports = {
       const office_id = await getOfficeIdByName(office_name, db);
       const position_id = await getPositionIdByName(position_name, db);
 
+      // Fix: Handle status conversion properly
+      let statusValue = 1; // default active
+      if (typeof status === 'boolean') {
+        statusValue = status ? 1 : 0;
+      } else if (typeof status === 'string') {
+        statusValue = (status === 'true' || status.toLowerCase() === 'active') ? 1 : 0;
+      } else if (typeof status === 'number') {
+        statusValue = status;
+      }
+
       const [result] = await db.query(`
         UPDATE employees SET
           name = ?, email = ?, office_id = ?, position_id = ?,
           monthlySalary = ?, joiningDate = ?, status = ?
         WHERE employeeId = ?
-      `, [name, email, office_id, position_id, monthlySalary, joiningDate, status ? 1 : 0, req.params.employeeId]);
+      `, [name, email, office_id, position_id, monthlySalary, joiningDate, statusValue, req.params.employeeId]);
 
       if (!result.affectedRows) return res.status(404).json({ error: 'Employee not found' });
 
@@ -225,7 +264,12 @@ module.exports = {
         WHERE e.employeeId = ?
       `, [req.params.employeeId]);
 
-      res.json(updatedEmployee[0]);
+      // Fix: Return consistent format
+      const employee = updatedEmployee[0];
+      employee.status = employee.status === 1;
+      employee.position_name = employee.position_title;
+
+      res.json(employee);
     } catch (err) {
       console.error('Error:', err);
       res.status(500).json({ error: err.message });
@@ -255,8 +299,8 @@ module.exports = {
         'Employee ID': 'EMP001',
         'Name': 'Sample Name',
         'Email': 'sample@email.com',
-        'Office Name': offices[0]?.name,
-        'Position Name': positions[0]?.title,
+        'Office Name': offices[0]?.name || 'Head Office',
+        'Position Name': positions[0]?.title || 'Software Developer',
         'Salary': 5000,
         'Joining Date': '2023-01-01',
         'Status': 'active'
@@ -283,9 +327,14 @@ module.exports = {
       const db = req.db;
       if (!db) throw new Error('Database connection not available on request');
 
+      console.log('Processing file:', req.file.originalname);
+      console.log('File path:', req.file.path);
+
       const workbook = XLSX.readFile(req.file.path);
       const sheetName = workbook.SheetNames[0];
       const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+      console.log('Excel data:', data);
 
       const requiredColumns = [
         'Employee ID', 'Name', 'Email', 'Office Name', 'Position Name', 'Salary', 'Joining Date', 'Status'
@@ -297,25 +346,41 @@ module.exports = {
             throw new Error(`Required column "${col}" not found in Excel file`);
           }
         }
+      } else {
+        throw new Error('Excel file has no data');
       }
 
       const processed = [];
       for (const row of data) {
         if (!row['Employee ID'] || !row['Office Name'] || !row['Position Name']) {
-          throw new Error('Employee ID, Office Name, and Position Name are required for each row');
+          console.log('Skipping row due to missing required fields:', row);
+          continue;
         }
-        const office_id = await getOfficeIdByName(row['Office Name'], db);
-        const position_id = await getPositionIdByName(row['Position Name'], db);
-        processed.push([
-          row['Employee ID'],
-          row['Name'],
-          row['Email'],
-          office_id,
-          position_id,
-          row['Salary'],
-          row['Joining Date'],
-          row['Status'] === 'active' ? 1 : 0
-        ]);
+
+        try {
+          const office_id = await getOfficeIdByName(row['Office Name'], db);
+          const position_id = await getPositionIdByName(row['Position Name'], db);
+          
+          // Fix: Handle status properly
+          let statusValue = 1;
+          if (typeof row['Status'] === 'string') {
+            statusValue = (row['Status'].toLowerCase() === 'active') ? 1 : 0;
+          }
+
+          processed.push([
+            row['Employee ID'],
+            row['Name'],
+            row['Email'],
+            office_id,
+            position_id,
+            row['Salary'],
+            row['Joining Date'],
+            statusValue
+          ]);
+        } catch (error) {
+          console.error('Error processing row:', row, error.message);
+          throw new Error(`Error processing employee ${row['Employee ID']}: ${error.message}`);
+        }
       }
 
       if (processed.length > 0) {
@@ -325,14 +390,32 @@ module.exports = {
           INSERT INTO employees 
           (employeeId, name, email, office_id, position_id, monthlySalary, joiningDate, status)
           VALUES ${placeholders}
+          ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            email = VALUES(email),
+            office_id = VALUES(office_id),
+            position_id = VALUES(position_id),
+            monthlySalary = VALUES(monthlySalary),
+            joiningDate = VALUES(joiningDate),
+            status = VALUES(status)
         `;
         await db.query(sql, flatValues);
       }
 
-      fs.unlinkSync(req.file.path);
-      res.json({ message: `${processed.length} employees imported` });
+      // Clean up uploaded file
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      res.json({ 
+        message: `${processed.length} employees imported successfully`,
+        imported: processed.length 
+      });
     } catch (err) {
-      if (req.file?.path) fs.unlinkSync(req.file.path);
+      // Clean up uploaded file on error
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       console.error('Import error:', err);
       res.status(500).json({ error: 'Import failed: ' + err.message });
     }

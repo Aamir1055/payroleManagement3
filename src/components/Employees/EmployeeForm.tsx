@@ -98,18 +98,35 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
         }
 
         if (employee) {
-          const officeObj = officesData.find(o => o.name === employee.office_name);
-          const positionObj = positionsData.find(p =>
-            p.title === (employee.position_name || employee.position_title)
+          // Fix: Better handling of office and position mapping
+          const officeObj = officesData.find(o => 
+            o.name === employee.office_name || 
+            o.id === employee.office_id
           );
+          
+          const positionObj = positionsData.find(p =>
+            p.title === (employee.position_name || employee.position_title) ||
+            p.id === employee.position_id
+          );
+
+          // Fix: Proper status handling - convert various formats to boolean
+          let statusBoolean = true; // default
+          if (typeof employee.status === 'boolean') {
+            statusBoolean = employee.status;
+          } else if (typeof employee.status === 'number') {
+            statusBoolean = employee.status === 1;
+          } else if (typeof employee.status === 'string') {
+            statusBoolean = employee.status.toLowerCase() === 'active' || employee.status === '1';
+          }
 
           reset({
             ...employee,
             office_id: officeObj?.id ?? 0,
             position_id: positionObj?.id ?? 0,
-            position_name: employee.position_name || employee.position_title || '',
+            office_name: employee.office_name || officeObj?.name || '',
+            position_name: employee.position_name || employee.position_title || positionObj?.title || '',
             joiningDate: employee.joiningDate?.split('T')[0],
-            status: employee.status, // ✅ already a boolean
+            status: statusBoolean, // Fix: Ensure boolean status
           });
 
           setReportingTime(employee.reporting_time?.toString() || 'Not set');
@@ -202,7 +219,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
         position_name: position?.title || '',
         monthlySalary: formData.monthlySalary,
         joiningDate: formData.joiningDate ? new Date(formData.joiningDate).toISOString().split('T')[0] : '',
-        status: formData.status ? 1 : 0, // ✅ Convert boolean to 1/0
+        status: formData.status, // Keep as boolean for frontend, backend will handle conversion
       };
 
       if (onSubmit) {
@@ -349,19 +366,18 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
             {errors.joiningDate && <p className="text-red-500 text-sm mt-1">{errors.joiningDate.message}</p>}
           </div>
 
-          {/* Status */}
+          {/* Status - Fixed */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
             <select
-              {...register('status')}
+              {...register('status', { required: 'Status is required' })}
               disabled={viewOnly}
-              value={statusValue ? 'true' : 'false'}
-              onChange={(e) => setValue('status', e.target.value === 'true')}
               className="w-full border border-gray-300 rounded-lg px-3 py-2"
             >
               <option value="true">Active</option>
               <option value="false">Inactive</option>
             </select>
+            {errors.status && <p className="text-red-500 text-sm mt-1">{errors.status.message}</p>}
           </div>
 
           {/* Reporting Time */}

@@ -41,7 +41,9 @@ export const useEmployees = () => {
       const processedData = data.map((emp: any) => ({
         ...emp,
         office_name: getDisplayName(emp.office_name, 'name', 'office_name') || 'Not assigned',
-        position_name: getDisplayName(emp.position_name, 'title', 'position_name') || emp.position_title || 'Not assigned'
+        position_name: getDisplayName(emp.position_name, 'title', 'position_name') || emp.position_title || 'Not assigned',
+        // Fix: Ensure status is boolean
+        status: emp.status === 1 || emp.status === true || emp.status === 'active'
       }));
 
       setEmployees(processedData);
@@ -64,17 +66,21 @@ export const useEmployees = () => {
       if (!employee.office_name || !employee.position_name) {
         throw new Error('Office and Position are required');
       }
+      
+      // Fix: Ensure status is handled properly
+      const employeeData = {
+        ...employee,
+        status: employee.status === true || employee.status === 'true' || employee.status === 1
+      };
+
       const response = await fetch('/api/employees', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({
-          ...employee,
-          office_name: employee.office_name,
-          position_name: employee.position_name
-        })
+        body: JSON.stringify(employeeData)
       });
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
       await fetchEmployees();
@@ -91,17 +97,21 @@ export const useEmployees = () => {
       if (!updates.office_name || !updates.position_name) {
         throw new Error('Office and Position are required');
       }
+      
+      // Fix: Ensure status is handled properly
+      const updateData = {
+        ...updates,
+        status: updates.status === true || updates.status === 'true' || updates.status === 1
+      };
+
       const response = await fetch(`/api/employees/${employeeId}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
-        body: JSON.stringify({
-          ...updates,
-          office_name: updates.office_name,
-          position_name: updates.position_name
-        })
+        body: JSON.stringify(updateData)
       });
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
       await fetchEmployees();
@@ -119,7 +129,8 @@ export const useEmployees = () => {
         headers: getAuthHeaders()
       });
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
       await fetchEmployees();
     } catch (err) {
