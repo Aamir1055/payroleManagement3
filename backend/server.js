@@ -11,7 +11,8 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  rowsAsArray: false  
 });
 
 // Attach pool to req.db for all incoming requests
@@ -28,10 +29,11 @@ const upload = require('./middleware/upload');
 const authRoutes = require('./routes/authRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
-//const payrollRoutes = require('./routes/payrollRoutes');
+const payrollRoutes = require('./routes/payrollRoutes');
 const holidaysRoutes = require('./routes/holidaysRoutes');
 const masterRoutes = require('./routes/masterRoutes');
-const reportsRoutes = require('./routes/reportRoutes');
+const roleRoutes = require('./routes/roleRoutes');
+const flushRoutes = require('./routes/flushRoutes'); // NEW
 
 // Middleware
 app.use(cors());
@@ -50,13 +52,13 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 
 // Protected routes with role-based access
-app.use('/api/employees', verifyToken, employeeRoutes);
-app.use('/api/attendance', verifyToken, attendanceRoutes);
-//app.use('/api/payroll', verifyToken, requireManager, payrollRoutes);
-app.use('/api/holidays', verifyToken, requireHR, holidaysRoutes);
-app.use('/api/masters', verifyToken, masterRoutes);
-//app.use('/api/reports', verifyToken, requireManager, reportsRoutes);
-app.use('/api/reports', reportsRoutes);
+app.use('/api/employees', employeeRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/payroll', payrollRoutes);
+app.use('/api/holidays', holidaysRoutes);
+app.use('/api/roles', roleRoutes);
+app.use('/api/masters', masterRoutes);
+app.use('/api/flush', verifyToken,  flushRoutes); // NEW - ADMIN ONLY
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -103,6 +105,7 @@ app.listen(PORT, () => {
     console.log('🏢 Masters: /api/masters/* (admin required)');
     console.log('🎉 Holidays: /api/holidays/* (hr+ required)');
     console.log('📊 Reports: /api/reports/* (manager+ required)');
+    console.log('🗑️ Flush DB: /api/flush/* (admin required)'); // NEW
     console.log('\n⚙️ Setup: node migrate.js');
   }
 });

@@ -13,6 +13,16 @@ export interface Employee {
   reporting_time?: string;
   duty_hours?: number;
   position_title?: string; // Optional, if not always present
+  dob?: string;
+  passport_number?: string;
+  passport_expiry?: string;
+  visa_type?: number; // This stores the ID
+  visa_type_name?: string; // This stores the actual visa type name
+  visa_type_id?: number; // For form handling
+  address?: string;
+  phone?: string;
+  gender?: string;
+  
 }
 
 export interface AttendanceRecord {
@@ -49,6 +59,18 @@ export interface Office {
   id: string;
   name: string;
   location: string;
+}
+
+export interface User {
+  id: number;
+  username: string;
+  password?: string;
+  role: 'admin' | 'hr' | 'floor_manager';
+  two_factor_secret?: string;
+  two_factor_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  offices?: Office[];
 }
 
 export interface PayrollSummary {

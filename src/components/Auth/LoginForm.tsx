@@ -34,7 +34,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading, error })
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-        
+
         {/* Logo and Title */}
         <div className="text-center mb-8">
           <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -56,7 +56,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading, error })
 
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          
+
           {/* Username Field */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
@@ -126,7 +126,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading, error })
                 <input
                   type="text"
                   value={credentials.twoFactorCode}
-                  onChange={(e) => handleInputChange('twoFactorCode', e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onChange={(e) =>
+                    handleInputChange('twoFactorCode', e.target.value.replace(/\D/g, '').slice(0, 6))
+                  }
                   className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-center text-lg tracking-widest"
                   placeholder="000000"
                   maxLength={6}
@@ -144,7 +146,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading, error })
           {/* Login Button */}
           <button
             type="submit"
-            disabled={loading || !credentials.username || !credentials.password || (showTwoFactor && (!credentials.twoFactorCode || credentials.twoFactorCode.length !== 6))}
+            disabled={
+              loading ||
+              !credentials.username ||
+              !credentials.password ||
+              (showTwoFactor && (!credentials.twoFactorCode || credentials.twoFactorCode.length !== 6))
+            }
             className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
           >
             {loading ? (
@@ -157,98 +164,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading, error })
             )}
           </button>
         </form>
-
-        {/* Help Text */}
-        <div className="mt-6 text-center text-sm text-gray-600">
-          <p className="font-medium text-gray-800 mb-3">Available User Accounts:</p>
-          
-          <div className="grid grid-cols-1 gap-3">
-            {/* Admin Account */}
-            <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-              <div className="flex items-center justify-between">
-                <div className="text-left">
-                  <p className="font-semibold text-purple-800">👤 Administrator</p>
-                  <p className="text-xs text-purple-600">Username: <strong>admin</strong> | Password: <strong>admin123</strong></p>
-                </div>
-                <button
-                  onClick={() => {
-                    setCredentials({
-                      username: 'admin',
-                      password: 'admin123',
-                      twoFactorCode: ''
-                    });
-                  }}
-                  className="px-3 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700"
-                >
-                  Use
-                </button>
-              </div>
-              <div className="mt-1 text-xs text-purple-600">
-                ✅ Full system access • Manage all data • User management
-              </div>
-            </div>
-
-            {/* HR Account */}
-            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="flex items-center justify-between">
-                <div className="text-left">
-                  <p className="font-semibold text-blue-800">👨‍💼 Human Resources</p>
-                  <p className="text-xs text-blue-600">Username: <strong>hr</strong> | Password: <strong>hr123</strong></p>
-                </div>
-                <button
-                  onClick={() => {
-                    setCredentials({
-                      username: 'hr',
-                      password: 'hr123',
-                      twoFactorCode: ''
-                    });
-                  }}
-                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
-                >
-                  Use
-                </button>
-              </div>
-              <div className="mt-1 text-xs text-blue-600">
-                ✅ Employee management • Payroll • Reports • Holiday management
-              </div>
-            </div>
-
-            {/* Floor Manager Account */}
-            <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-              <div className="flex items-center justify-between">
-                <div className="text-left">
-                  <p className="font-semibold text-green-800">👨‍💼 Floor Manager</p>
-                  <p className="text-xs text-green-600">Username: <strong>floormanager</strong> | Password: <strong>manager123</strong></p>
-                </div>
-                <button
-                  onClick={() => {
-                    setCredentials({
-                      username: 'floormanager',
-                      password: 'manager123',
-                      twoFactorCode: ''
-                    });
-                  }}
-                  className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
-                >
-                  Use
-                </button>
-              </div>
-              <div className="mt-1 text-xs text-green-600">
-                ✅ Employee management • Payroll management • Reports access
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
-            <p className="text-amber-800 font-medium text-xs">🔐 Security Features Available:</p>
-            <div className="text-xs mt-1 space-y-1 text-amber-700">
-              <p>• Two-Factor Authentication (Google Authenticator)</p>
-              <p>• Role-based access control</p>
-              <p>• JWT token security with 24-hour expiration</p>
-              <p>• Password encryption with bcrypt</p>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -232,7 +232,7 @@ exports.getProfile = async (req, res) => {
 
   try {
     const users = await query(
-      'SELECT id, username, role, employee_id, two_factor_enabled, created_at FROM Users WHERE id = ?',
+      'SELECT id, username, role,two_factor_enabled, created_at FROM Users WHERE id = ?',
       [userId]
     );
 

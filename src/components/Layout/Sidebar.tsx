@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useMasterData } from '../../context/MasterDataContext';
 import { 
   LayoutDashboard, 
   Users, 
@@ -14,29 +15,32 @@ import {
   ChevronRight,
   Plus,
   User,
-  Settings
+  Settings,
+  Trash2,
+  CreditCard
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Employees', href: '/employees', icon: Users },
   { name: 'Payroll', href: '/payroll', icon: DollarSign },
-  { name: 'Reports', href: '/reports', icon: FileText },
   { name: 'Holidays', href: '/holidays', icon: Calendar },
   { name: 'Profile', href: '/profile', icon: User },
   { name: 'Attendance', href: '/attendance', icon: Calendar },
+  { name: 'Flush DB', href: '/flush-db', icon: Trash2, adminOnly: true },
 ];
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddOffice?: () => void;
-  onAddPosition?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onAddOffice, onAddPosition }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [masterDataExpanded, setMasterDataExpanded] = useState(false);
   const { user, logout, hasPermission } = useAuth();
+  
+  // CORRECT: Use the exact function names from your MasterDataContext
+  const { openOfficeManager, openPositionManager, openVisaTypeManager } = useMasterData();
 
   const getRoleDisplay = (role: string) => {
     const roleMap = {
@@ -53,8 +57,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onAddOffice, 
     onClose();
   };
 
-  // Filter navigation based on permissions
   const filteredNavigation = navigation.filter(item => {
+    const adminOnly = (item as any).adminOnly;
+    
+    if (adminOnly && user?.role !== 'admin') {
+      return false;
+    }
+
     switch (item.href) {
       case '/holidays':
         return hasPermission('manage_holidays');
@@ -62,10 +71,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onAddOffice, 
         return hasPermission('manage_employees');
       case '/payroll':
         return hasPermission('manage_payroll');
-      case '/reports':
-        return hasPermission('view_reports');
+      case '/flush-db':
+        return user?.role === 'admin';
       default:
-        return true; // Dashboard and Profile are always accessible
+        return true;
     }
   });
 
@@ -101,17 +110,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onAddOffice, 
                   `flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${
                     isActive
                       ? 'bg-blue-50 text-blue-600 border-r-2 border-blue-600'
-                      : 'text-gray-700 hover:bg-gray-50 hover:text-blue-600'
+                      : item.href === '/flush-db'
+                        ? 'text-red-600 hover:bg-red-50 hover:text-red-600'
+                        : 'text-gray-700 hover:bg-gray-50 hover:text-blue-600'
                   }`
                 }
                 onClick={() => window.innerWidth < 1024 && onClose()}
               >
-                <item.icon className="w-5 h-5 mr-3" />
-                {item.name}
+                <item.icon className={`w-5 h-5 mr-3 ${item.href === '/flush-db' ? 'text-red-500' : ''}`} />
+                <span className={item.href === '/flush-db' ? 'text-red-600 font-semibold' : ''}>
+                  {item.name}
+                </span>
               </NavLink>
             ))}
 
-            {/* Master Data Section - Only for Admin */}
+            {/* Master Data Section - BOTH WORKING */}
             {hasPermission('manage_offices') && (
               <div className="pt-4 border-t border-gray-200">
                 <button
@@ -133,25 +146,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onAddOffice, 
                   <div className="ml-4 mt-2 space-y-1">
                     <button
                       onClick={() => {
-                        onAddOffice?.();
+                        openOfficeManager();
                         window.innerWidth < 1024 && onClose();
                       }}
                       className="flex items-center w-full px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-md transition-colors duration-200"
                     >
                       <Building2 className="w-4 h-4 mr-3" />
-                      <Plus className="w-3 h-3 mr-2" />
-                      Add Office
+                      Manage Offices
                     </button>
                     <button
                       onClick={() => {
-                        onAddPosition?.();
+                        openPositionManager();
                         window.innerWidth < 1024 && onClose();
                       }}
                       className="flex items-center w-full px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-md transition-colors duration-200"
                     >
                       <Briefcase className="w-4 h-4 mr-3" />
-                      <Plus className="w-3 h-3 mr-2" />
-                      Add Position
+                      Manage Positions
+                    </button>
+                    {/* CORRECTED: Use openVisaTypeManager (matches your context) */}
+                    <button
+                      onClick={() => {
+                        openVisaTypeManager();
+                        window.innerWidth < 1024 && onClose();
+                      }}
+                      className="flex items-center w-full px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-md transition-colors duration-200"
+                    >
+                      <CreditCard className="w-4 h-4 mr-3" />
+                      Manage Visas
                     </button>
                   </div>
                 )}

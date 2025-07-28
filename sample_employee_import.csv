@@ -1,0 +1,11 @@
+Employee ID,Name,Email,Office ID,Position ID,Salary,Joining Date,Status,DOB,Passport Number,Passport Expiry,Visa Type,Address,Phone,Gender
+EMP001,John Smith,john.smith@company.com,1,1,5000,2024-01-15,active,1990-05-12,P1234567,2030-05-12,1,123 Main Street New York NY,+1-555-0101,Male
+EMP002,Sarah Johnson,sarah.johnson@company.com,1,2,5500,2024-02-01,active,1988-08-20,P2345678,2029-08-20,2,456 Oak Avenue Los Angeles CA,+1-555-0102,Female
+EMP003,Michael Brown,michael.brown@company.com,2,1,4800,2024-01-20,active,1992-03-15,P3456789,2031-03-15,1,789 Pine Road Chicago IL,+1-555-0103,Male
+EMP004,Emily Davis,emily.davis@company.com,2,3,6000,2024-03-10,active,1985-11-30,P4567890,2028-11-30,3,321 Elm Street Miami FL,+1-555-0104,Female
+EMP005,David Wilson,david.wilson@company.com,1,2,5200,2024-02-15,active,1991-07-08,P5678901,2030-07-08,2,654 Maple Drive Seattle WA,+1-555-0105,Male
+EMP006,Lisa Anderson,lisa.anderson@company.com,3,4,7000,2024-01-05,active,1987-12-22,P6789012,2029-12-22,1,987 Cedar Lane Boston MA,+1-555-0106,Female
+EMP007,James Taylor,james.taylor@company.com,2,2,5300,2024-04-01,active,1989-04-18,P7890123,2031-04-18,3,147 Birch Court Dallas TX,+1-555-0107,Male
+EMP008,Jennifer Martinez,jennifer.martinez@company.com,1,3,5800,2024-03-20,active,1993-09-05,P8901234,2030-09-05,2,258 Spruce Avenue Denver CO,+1-555-0108,Female
+EMP009,Robert Garcia,robert.garcia@company.com,3,1,4900,2024-02-28,active,1990-01-14,P9012345,2029-01-14,1,369 Willow Street Phoenix AZ,+1-555-0109,Male
+EMP010,Michelle Lee,michelle.lee@company.com,2,4,6500,2024-01-25,active,1986-06-27,P0123456,2028-06-27,3,741 Poplar Road Portland OR,+1-555-0110,Female

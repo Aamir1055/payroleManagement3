@@ -61,6 +61,70 @@ exports.createOffice = async (req, res) => {
   }
 };
 
+// Update an office
+exports.updateOffice = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, location } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Office name is required' });
+    }
+    
+    const result = await query(
+      'UPDATE offices SET name = ?, location = ? WHERE id = ?', 
+      [name, location || '', id]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Office not found' });
+    }
+    
+    res.json({ 
+      id: parseInt(id), 
+      name, 
+      location: location || '',
+      message: 'Office updated successfully'
+    });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Office name already exists' });
+    }
+    console.error('Error updating office:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Delete an office
+exports.deleteOffice = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if office has employees
+    const employeeCheck = await query(
+      'SELECT COUNT(*) as count FROM employees WHERE office_id = ?', 
+      [id]
+    );
+    
+    if (employeeCheck[0].count > 0) {
+      return res.status(400).json({ 
+        error: 'Cannot delete office with active employees. Please reassign employees first.' 
+      });
+    }
+    
+    const result = await query('DELETE FROM offices WHERE id = ?', [id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Office not found' });
+    }
+    
+    res.json({ message: 'Office deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting office:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // Create office with positions - simplified version
 exports.createOfficeWithPositions = async (req, res) => {
   try {
@@ -170,11 +234,17 @@ exports.getAllPositions = async (req, res) => {
   try {
     const results = await query(`
       SELECT 
-        id as position_id,
-        title as position_name,
-        description
-      FROM positions 
-      ORDER BY title
+        p.id as position_id,
+        p.title as position_name,
+        p.description,
+        op.office_id,
+        o.name as office_name,
+        op.reporting_time,
+        op.duty_hours
+      FROM positions p
+      LEFT JOIN office_positions op ON p.id = op.position_id
+      LEFT JOIN offices o ON op.office_id = o.id
+      ORDER BY p.title
     `);
     res.json(results);
   } catch (err) {
@@ -186,21 +256,45 @@ exports.getAllPositions = async (req, res) => {
 // Create a new position
 exports.createPosition = async (req, res) => {
   try {
-    const { title, description } = req.body;
+    const { title, description, office_id, reporting_time, duty_hours } = req.body;
     
     if (!title) {
       return res.status(400).json({ error: 'Position title is required' });
     }
     
-    const result = await query(
-      'INSERT INTO positions (title, description) VALUES (?, ?)', 
-      [title, description || '']
-    );
+    // Check if position exists
+    let posResult = await query('SELECT id FROM positions WHERE title = ?', [title]);
+    let positionId;
+    
+    if (posResult.length > 0) {
+      positionId = posResult[0].id;
+    } else {
+      // Create new position
+      const newPosResult = await query(
+        'INSERT INTO positions (title, description) VALUES (?, ?)', 
+        [title, description || '']
+      );
+      positionId = newPosResult.insertId;
+    }
+    
+    // If office_id is provided, create office-position relationship
+    if (office_id && reporting_time && duty_hours) {
+      await query(`
+        INSERT INTO office_positions (office_id, position_id, reporting_time, duty_hours)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+        reporting_time = VALUES(reporting_time),
+        duty_hours = VALUES(duty_hours)
+      `, [office_id, positionId, reporting_time, duty_hours]);
+    }
     
     res.status(201).json({ 
-      id: result.insertId, 
+      id: positionId, 
       title, 
       description: description || '',
+      office_id: office_id || null,
+      reporting_time: reporting_time || null,
+      duty_hours: duty_hours || null,
       message: 'Position created successfully'
     });
   } catch (err) {
@@ -208,6 +302,88 @@ exports.createPosition = async (req, res) => {
       return res.status(400).json({ error: 'Position title already exists' });
     }
     console.error('Error creating position:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Update a position
+exports.updatePosition = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, office_id, reporting_time, duty_hours } = req.body;
+    
+    if (!title) {
+      return res.status(400).json({ error: 'Position title is required' });
+    }
+    
+    // Update the position basic info
+    const result = await query(
+      'UPDATE positions SET title = ?, description = ? WHERE id = ?', 
+      [title, description || '', id]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Position not found' });
+    }
+    
+    // Update office-position relationship if office_id is provided
+    if (office_id && reporting_time && duty_hours) {
+      await query(`
+        INSERT INTO office_positions (office_id, position_id, reporting_time, duty_hours)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+        reporting_time = VALUES(reporting_time),
+        duty_hours = VALUES(duty_hours)
+      `, [office_id, id, reporting_time, duty_hours]);
+    }
+    
+    res.json({ 
+      id: parseInt(id), 
+      title, 
+      description: description || '',
+      office_id: office_id || null,
+      reporting_time: reporting_time || null,
+      duty_hours: duty_hours || null,
+      message: 'Position updated successfully'
+    });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Position title already exists' });
+    }
+    console.error('Error updating position:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Delete a position
+exports.deletePosition = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if position has employees
+    const employeeCheck = await query(
+      'SELECT COUNT(*) as count FROM employees WHERE position_id = ?', 
+      [id]
+    );
+    
+    if (employeeCheck[0].count > 0) {
+      return res.status(400).json({ 
+        error: 'Cannot delete position with active employees. Please reassign employees first.' 
+      });
+    }
+    
+    // Delete office-position relationships first
+    await query('DELETE FROM office_positions WHERE position_id = ?', [id]);
+    
+    const result = await query('DELETE FROM positions WHERE id = ?', [id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Position not found' });
+    }
+    
+    res.json({ message: 'Position deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting position:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -260,6 +436,125 @@ exports.createOfficeSpecificPosition = async (req, res) => {
     });
   } catch (err) {
     console.error('Error creating office-specific position:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ================ VISA TYPE CONTROLLERS ================
+
+// Get all visa types
+exports.getAllVisaTypes = async (req, res) => {
+  try {
+    const results = await query(`
+      SELECT 
+        vt.id,
+        vt.typeofvisa,
+        COALESCE(emp_summary.employeeCount, 0) as employeeCount
+      FROM visa_types vt
+      LEFT JOIN (
+        SELECT 
+          visa_type, 
+          COUNT(*) AS employeeCount 
+        FROM employees 
+        WHERE status = 1
+        GROUP BY visa_type
+      ) emp_summary ON vt.typeofvisa = emp_summary.visa_type
+      ORDER BY vt.typeofvisa
+    `);
+    res.json(results);
+  } catch (err) {
+    console.error('Error fetching visa types:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Create a new visa type
+exports.createVisaType = async (req, res) => {
+  try {
+    const { typeofvisa } = req.body;
+    
+    if (!typeofvisa) {
+      return res.status(400).json({ error: 'Visa type name is required' });
+    }
+    
+    const result = await query(
+      'INSERT INTO visa_types (typeofvisa) VALUES (?)', 
+      [typeofvisa]
+    );
+    
+    res.status(201).json({ 
+      id: result.insertId, 
+      typeofvisa,
+      message: 'Visa type created successfully'
+    });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Visa type name already exists' });
+    }
+    console.error('Error creating visa type:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Update a visa type
+exports.updateVisaType = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { typeofvisa } = req.body;
+    
+    if (!typeofvisa) {
+      return res.status(400).json({ error: 'Visa type name is required' });
+    }
+    
+    const result = await query(
+      'UPDATE visa_types SET typeofvisa = ? WHERE id = ?', 
+      [typeofvisa, id]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Visa type not found' });
+    }
+    
+    res.json({ 
+      id: parseInt(id), 
+      typeofvisa,
+      message: 'Visa type updated successfully'
+    });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Visa type name already exists' });
+    }
+    console.error('Error updating visa type:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Delete a visa type
+exports.deleteVisaType = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if visa type has employees
+    const employeeCheck = await query(
+      'SELECT COUNT(*) as count FROM employees WHERE visa_type = (SELECT typeofvisa FROM visa_types WHERE id = ?)', 
+      [id]
+    );
+    
+    if (employeeCheck[0].count > 0) {
+      return res.status(400).json({ 
+        error: 'Cannot delete visa type with active employees. Please reassign employees first.' 
+      });
+    }
+    
+    const result = await query('DELETE FROM visa_types WHERE id = ?', [id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Visa type not found' });
+    }
+    
+    res.json({ message: 'Visa type deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting visa type:', err);
     res.status(500).json({ error: err.message });
   }
 };
