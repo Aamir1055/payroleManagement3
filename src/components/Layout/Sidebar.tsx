@@ -17,7 +17,8 @@ import {
   User,
   Settings,
   Trash2,
-  CreditCard
+  CreditCard,
+  UserCog // Better icon for Role Management
 } from 'lucide-react';
 
 const navigation = [
@@ -27,6 +28,7 @@ const navigation = [
   { name: 'Holidays', href: '/holidays', icon: Calendar },
   { name: 'Profile', href: '/profile', icon: User },
   { name: 'Attendance', href: '/attendance', icon: Calendar },
+  { name: 'Role Management', href: '/roles', icon: UserCog }, // Changed icon for better distinction
   { name: 'Flush DB', href: '/flush-db', icon: Trash2, adminOnly: true },
 ];
 
@@ -65,6 +67,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     }
 
     switch (item.href) {
+      case '/role-management':
+        // Only admins should see role management
+        return user?.role === 'admin';
       case '/holidays':
         return hasPermission('manage_holidays');
       case '/employees':
@@ -124,7 +129,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               </NavLink>
             ))}
 
-            {/* Master Data Section - BOTH WORKING */}
+            {/* Master Data Section */}
             {hasPermission('manage_offices') && (
               <div className="pt-4 border-t border-gray-200">
                 <button
@@ -164,7 +169,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                       <Briefcase className="w-4 h-4 mr-3" />
                       Manage Positions
                     </button>
-                    {/* CORRECTED: Use openVisaTypeManager (matches your context) */}
                     <button
                       onClick={() => {
                         openVisaTypeManager();
