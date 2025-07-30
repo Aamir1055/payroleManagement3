@@ -182,7 +182,7 @@ const AppRoutes: React.FC = () => {
         }
       />
       <Route
-        path="/holidays"
+        path="/api/holidays"
         element={
           <ProtectedRoute permission="manage_holidays">
             <Holidays />

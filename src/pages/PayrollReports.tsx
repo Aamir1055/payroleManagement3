@@ -65,8 +65,8 @@ const PayrollReports: React.FC = () => {
   const fetchDropdowns = async () => {
     try {
       const [officeRes, positionRes] = await Promise.all([
-        axios.get('/api/payroll/offices'),
-        axios.get('/api/payroll/positions')
+        axios.get('/payroll/offices'),
+        axios.get('/payroll/positions')
       ]);
       setOffices(officeRes.data.data);
       setPositions(positionRes.data.data);
@@ -79,8 +79,8 @@ const PayrollReports: React.FC = () => {
     setCalendarLoading(true);
     const [y, m] = yearMonth.split('-');
     try {
-      const res = await axios.get('/api/payroll/attendance-days', {
-        params: { year: y, month: m }
+      const res = await axios.get('/attendance/filter', {
+        params: { fromDate: `${y}-${m.padStart(2, "0")}-01`, toDate: new Date(parseInt(y), parseInt(m), 0).toISOString().substring(0, 10) }
       });
       setCalendarDays(res.data.days || []);
     } catch {
@@ -104,7 +104,7 @@ const PayrollReports: React.FC = () => {
       const params: any = { fromDate, toDate, page, pageSize };
       if (officeId) params.office = officeId;
       if (positionId) params.position = positionId;
-      const res = await axios.get('/api/payroll/reports', { params });
+      const res = await axios.get('/payroll/reports', { params });
       setPayrollData(res.data.data);
       setSummary(res.data.summary);
       if (res.data.data.length === 0) {
@@ -134,7 +134,7 @@ const PayrollReports: React.FC = () => {
         setError('');
         
         try {
-          const response = await axios.delete('/api/payroll/attendance/month', {
+          const response = await axios.delete('/attendance/month', {
             data: {
               year: parseInt(year),
               month: parseInt(month)

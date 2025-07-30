@@ -3,7 +3,7 @@ const { query } = require('../utils/dbPromise');
 // Get all holidays
 exports.getAllHolidays = async (req, res) => {
   try {
-    const results = await query('SELECT * FROM Holidays ORDER BY date ASC');
+    const results = await query('SELECT * FROM holidays ORDER BY date ASC');
     res.json(results);
   } catch (err) {
     console.error('Error fetching holidays:', err);
@@ -25,7 +25,7 @@ exports.getHolidaysByMonth = async (req, res) => {
     const endDate = `${year}-${paddedMonth}-31`;
     
     const results = await query(
-      'SELECT * FROM Holidays WHERE date BETWEEN ? AND ? ORDER BY date ASC',
+      'SELECT * FROM holidays WHERE date BETWEEN ? AND ? ORDER BY date ASC',
       [startDate, endDate]
     );
     res.json(results);
@@ -53,40 +53,23 @@ exports.getWorkingDays = async (req, res) => {
 
     const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
 
+    // Count Sundays
+    let sundays = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(yearNum, monthNum - 1, day);
+      if (date.getDay() === 0) sundays++;
+    }
+
     const startDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-01`;
     const endDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-${daysInMonth}`;
 
-    // Get all holidays for the month
-    const holidayResults = await query(
-      'SELECT date FROM Holidays WHERE date BETWEEN ? AND ?',
+    const results = await query(
+      'SELECT COUNT(*) as holidayCount FROM holidays WHERE date BETWEEN ? AND ?',
       [startDate, endDate]
     );
-    
-    const holidayDates = new Set(holidayResults.map(row => row.date));
-    
-    // Calculate working days and build days array
-    let sundays = 0;
-    const workingDaysList = [];
-    
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(yearNum, monthNum - 1, day);
-      const dateString = `${yearNum}-${String(monthNum).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      
-      const isSunday = date.getDay() === 0;
-      const isHoliday = holidayDates.has(dateString);
-      
-      if (isSunday) {
-        sundays++;
-      }
-      
-      // Add to working days if it's not a Sunday and not a holiday
-      if (!isSunday && !isHoliday) {
-        workingDaysList.push(dateString);
-      }
-    }
 
-    const holidays = holidayResults.length;
-    const workingDays = workingDaysList.length;
+    const holidays = results[0].holidayCount || 0;
+    const workingDays = Math.max(daysInMonth - sundays - holidays, 0);
 
     res.json({
       month: monthNum,
@@ -94,8 +77,7 @@ exports.getWorkingDays = async (req, res) => {
       totalDays: daysInMonth,
       sundays,
       holidays,
-      workingDays,
-      days: workingDaysList
+      workingDays
     });
   } catch (err) {
     console.error('Error calculating working days:', err);
@@ -118,7 +100,7 @@ exports.addHoliday = async (req, res) => {
 
   try {
     const result = await query(
-      'INSERT INTO Holidays (name, date, reason) VALUES (?, ?, ?)',
+      'INSERT INTO holidays (name, date, reason) VALUES (?, ?, ?)',
       [name, date, reason]
     );
 
@@ -173,7 +155,7 @@ exports.updateHoliday = async (req, res) => {
     values.push(id);
 
     const result = await query(
-      `UPDATE Holidays SET ${updates.join(', ')} WHERE id = ?`,
+      `UPDATE holidays SET ${updates.join(', ')} WHERE id = ?`,
       values
     );
 
@@ -196,7 +178,7 @@ exports.deleteHoliday = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const result = await query('DELETE FROM Holidays WHERE id = ?', [id]);
+    const result = await query('DELETE FROM holidays WHERE id = ?', [id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Holiday not found' });
@@ -215,7 +197,7 @@ exports.getUpcomingHolidays = async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     
     const results = await query(
-      'SELECT * FROM Holidays WHERE date >= ? ORDER BY date ASC LIMIT 10',
+      'SELECT * FROM holidays WHERE date >= ? ORDER BY date ASC LIMIT 10',
       [today]
     );
     

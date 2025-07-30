@@ -66,7 +66,7 @@ const EmployeePayrollDetails: React.FC = () => {
         params.fromDate = fromDate;
         params.toDate = toDate;
       }
-      const { data } = await axios.get(`/api/payroll/employee/${employeeId}`, { params });
+      const { data } = await axios.get(`/payroll/employee/${employeeId}`, { params });
       setEmployee(data.employee);
 
       // Calculate working hours for each row
@@ -130,7 +130,7 @@ const EmployeePayrollDetails: React.FC = () => {
         setError('');
         
         try {
-          const response = await axios.delete('/api/payroll/attendance/employee-month', {
+          const response = await axios.delete('/attendance/employee-month', {
             data: {
               employeeId,
               year: parseInt(year),
@@ -206,7 +206,7 @@ const EmployeePayrollDetails: React.FC = () => {
     setModalNotification('');
     try {
       const formattedDate = moment(date).format('YYYY-MM-DD');
-      const { data } = await axios.get(`/api/attendance/${empId}/${formattedDate}`);
+      const { data } = await axios.get(`/attendance/${empId}/${formattedDate}`);
       setModalAttendance(data);
     } catch (err: any) {
       setModalError(err.response?.data?.message || 'Failed to load attendance');
@@ -237,7 +237,7 @@ const EmployeePayrollDetails: React.FC = () => {
         setModalLoading(false);
         return;
       }
-      await axios.post(`/api/attendance`, {
+      await axios.post(`/attendance`, {
         employee_id,
         date: moment(date).format('YYYY-MM-DD'),
         punch_in,
@@ -264,7 +264,7 @@ const EmployeePayrollDetails: React.FC = () => {
     setModalNotification('');
     try {
       await axios.put(
-        `/api/attendance/${modalAttendance.employee_id}/${moment(modalAttendance.date).format('YYYY-MM-DD')}`,
+        `/attendance/${modalAttendance.employee_id}/${moment(modalAttendance.date).format('YYYY-MM-DD')}`,
         {
           punch_in: modalAttendance.punch_in,
           punch_out: modalAttendance.punch_out,
@@ -289,7 +289,7 @@ const EmployeePayrollDetails: React.FC = () => {
     setModalNotification('');
     try {
       const formattedDate = moment(modalAttendance.date).format('YYYY-MM-DD');
-      await axios.delete(`/api/attendance/${modalAttendance.employee_id}/${formattedDate}`);
+      await axios.delete(`/attendance/${modalAttendance.employee_id}/${formattedDate}`);
       setModalNotification('Deleted successfully');
       setTimeout(() => {
         setModalOpen(false);

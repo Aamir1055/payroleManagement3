@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const fetchDashboardStats = async () => {
         try {
-            const response = await fetch('/api/dashboard');
+            const response = await fetch('/dashboard');
             const data = await response.json();
 
             document.getElementById('total-employees').innerText = data.totalEmployees;
@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
         const formData = new FormData(importForm);
         try {
-            const response = await fetch('/api/import/employees', {
+            const response = await fetch('/import/employees', {
                 method: 'POST',
                 body: formData
             });
@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const generateSampleButton = document.getElementById('generate-sample-data');
     generateSampleButton.addEventListener('click', async () => {
         try {
-            const response = await fetch('/api/generate-sample-data', { method: 'POST' });
+            const response = await fetch('/generate-sample-data', { method: 'POST' });
             const result = await response.json();
             alert(`Sample data generated. Employees: ${result.employeesCount}, Payrolls: ${result.payrollsCount}`);
         } catch (error) {

@@ -22,7 +22,7 @@ export const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete, onCa
   const generateQRCode = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/auth/2fa/setup', {
+      const response = await fetch('/api/auth/2fa/setup', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -55,7 +55,7 @@ export const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete, onCa
       setError('');
 
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/auth/2fa/verify', {
+      const response = await fetch('/api/auth/2fa/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

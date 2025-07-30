@@ -17,7 +17,7 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Employees', href: '/employees', icon: Users },
   { name: 'Payroll', href: '/payroll', icon: DollarSign },
-  { name: 'Holidays', href: '/holidays', icon: Calendar },
+  { name: 'Holidays', href: '/api/holidays', icon: Calendar },
   { name: 'Profile', href: '/profile', icon: User },
   { name: 'Attendance', href: '/attendance', icon: Calendar },
   { name: 'Role Management', href: '/roles', icon: UserCog }, // Changed icon for better distinction
@@ -59,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       case '/role-management':
         // Only admins should see role management
         return user?.role === 'admin';
-      case '/holidays':
+      case '/api/holidays':
         return hasPermission('manage_holidays');
       case '/employees':
         return hasPermission('manage_employees');
