@@ -162,7 +162,9 @@ const AttendanceUpload: React.FC = () => {
           setUploadStats(null);
         }, 2000);
       } else {
-        if (data.invalidEmployeeIds && data.invalidEmployeeIds.length > 0) {
+        if (data.unauthorizedEmployeeIds && data.unauthorizedEmployeeIds.length > 0) {
+          setError(`🚫 ${data.message}`);
+        } else if (data.invalidEmployeeIds && data.invalidEmployeeIds.length > 0) {
           setError(`❌ Invalid Employee IDs found: ${data.invalidEmployeeIds.join(', ')}. Please verify these Employee IDs exist in the system and try again.`);
         } else {
           setError(data.message || 'Upload failed');

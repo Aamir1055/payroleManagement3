@@ -3,8 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth, LoginCredentials } from './context/AuthContext';
 import { ToastProvider } from './components/UI/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { MasterDataProvider } from './context/MasterDataContext';
-import { GlobalMasterData } from './components/GlobalMasterData';
 import { LoginForm } from './components/Auth/LoginForm';
 import AddEmployeePage from './pages/AddEmployee';
 import { Dashboard } from './pages/Dashboard';
@@ -15,7 +13,8 @@ import { Holidays } from './pages/holidays';
 import { Profile } from './pages/Profile';
 import { RoleManagement } from './pages/RoleManagement';
 import AttendanceUpload from './pages/AttendanceUpload';
-import FlushDB from './pages/FlushDB'; // ADD THIS IMPORT
+import FlushDB from './pages/FlushDB';
+import MasterData from './pages/MasterData';
 
 import 'react-toastify/dist/ReactToastify.css';
 import { ToastContainer } from 'react-toastify';
@@ -199,6 +198,14 @@ const AppRoutes: React.FC = () => {
         }
       />
       <Route
+        path="/master-data"
+        element={
+          <ProtectedRoute permission="manage_offices">
+            <MasterData />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/profile"
         element={
           <ProtectedRoute>
@@ -216,15 +223,12 @@ const App: React.FC = () => {
     <ErrorBoundary>
       <AuthProvider>
         <ToastProvider>
-          <MasterDataProvider>
-            <Router>
-              <div className="min-h-screen bg-gray-50">
-                <AppRoutes />
-                <GlobalMasterData />
-                <ToastContainer />
-              </div>
-            </Router>
-          </MasterDataProvider>
+          <Router>
+            <div className="min-h-screen bg-gray-50">
+              <AppRoutes />
+              <ToastContainer />
+            </div>
+          </Router>
         </ToastProvider>
       </AuthProvider>
     </ErrorBoundary>

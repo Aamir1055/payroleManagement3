@@ -325,8 +325,14 @@ const EmployeePayrollDetails: React.FC = () => {
   const missingDaysDeductions = missingDataCount * perDaySalary;
   const excessLeave = dailyRows.reduce((t, r) => t + (r.excessLeaves || 0), 0);
   const excessLeaveDeductions = 2 * excessLeave * perDaySalary;
-  const totalDeductions = actualDataDeductions + missingDaysDeductions + excessLeaveDeductions;
+  
+  // Calculate total deductions but cap it at monthly salary to prevent negative net salary
+  const calculatedDeductions = actualDataDeductions + missingDaysDeductions + excessLeaveDeductions;
+  const totalDeductions = Math.min(calculatedDeductions, employee.monthlySalary);
   const totalNetSalary = employee.monthlySalary - totalDeductions;
+  
+  // Track if deductions were capped
+  const deductionsCapped = calculatedDeductions > employee.monthlySalary;
 
   return (
     <MainLayout title={`${employee.name}`} subtitle={`ID: ${employee.employeeId}`}>

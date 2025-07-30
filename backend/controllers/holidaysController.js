@@ -53,23 +53,40 @@ exports.getWorkingDays = async (req, res) => {
 
     const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
 
-    // Count Sundays
-    let sundays = 0;
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(yearNum, monthNum - 1, day);
-      if (date.getDay() === 0) sundays++;
-    }
-
     const startDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-01`;
     const endDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-${daysInMonth}`;
 
-    const results = await query(
-      'SELECT COUNT(*) as holidayCount FROM Holidays WHERE date BETWEEN ? AND ?',
+    // Get all holidays for the month
+    const holidayResults = await query(
+      'SELECT date FROM Holidays WHERE date BETWEEN ? AND ?',
       [startDate, endDate]
     );
+    
+    const holidayDates = new Set(holidayResults.map(row => row.date));
+    
+    // Calculate working days and build days array
+    let sundays = 0;
+    const workingDaysList = [];
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(yearNum, monthNum - 1, day);
+      const dateString = `${yearNum}-${String(monthNum).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      
+      const isSunday = date.getDay() === 0;
+      const isHoliday = holidayDates.has(dateString);
+      
+      if (isSunday) {
+        sundays++;
+      }
+      
+      // Add to working days if it's not a Sunday and not a holiday
+      if (!isSunday && !isHoliday) {
+        workingDaysList.push(dateString);
+      }
+    }
 
-    const holidays = results[0].holidayCount || 0;
-    const workingDays = Math.max(daysInMonth - sundays - holidays, 0);
+    const holidays = holidayResults.length;
+    const workingDays = workingDaysList.length;
 
     res.json({
       month: monthNum,
@@ -77,7 +94,8 @@ exports.getWorkingDays = async (req, res) => {
       totalDays: daysInMonth,
       sundays,
       holidays,
-      workingDays
+      workingDays,
+      days: workingDaysList
     });
   } catch (err) {
     console.error('Error calculating working days:', err);

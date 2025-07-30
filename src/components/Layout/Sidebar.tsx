@@ -1,24 +1,16 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useMasterData } from '../../context/MasterDataContext';
 import { 
   LayoutDashboard, 
   Users, 
   DollarSign, 
-  FileText, 
   Calendar,
   LogOut,
-  Building2,
-  Briefcase,
-  ChevronDown,
-  ChevronRight,
-  Plus,
   User,
   Settings,
   Trash2,
-  CreditCard,
-  UserCog // Better icon for Role Management
+  UserCog
 } from 'lucide-react';
 
 const navigation = [
@@ -29,6 +21,7 @@ const navigation = [
   { name: 'Profile', href: '/profile', icon: User },
   { name: 'Attendance', href: '/attendance', icon: Calendar },
   { name: 'Role Management', href: '/roles', icon: UserCog }, // Changed icon for better distinction
+  { name: 'Master Data', href: '/master-data', icon: Settings }, // New Master Data route
   { name: 'Flush DB', href: '/flush-db', icon: Trash2, adminOnly: true },
 ];
 
@@ -38,11 +31,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  const [masterDataExpanded, setMasterDataExpanded] = useState(false);
   const { user, logout, hasPermission } = useAuth();
-  
-  // CORRECT: Use the exact function names from your MasterDataContext
-  const { openOfficeManager, openPositionManager, openVisaTypeManager } = useMasterData();
 
   const getRoleDisplay = (role: string) => {
     const roleMap = {
@@ -129,60 +118,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               </NavLink>
             ))}
 
-            {/* Master Data Section */}
-            {hasPermission('manage_offices') && (
-              <div className="pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => setMasterDataExpanded(!masterDataExpanded)}
-                  className="flex items-center justify-between w-full px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg transition-colors duration-200"
-                >
-                  <div className="flex items-center">
-                    <Settings className="w-5 h-5 mr-3" />
-                    Master Data
-                  </div>
-                  {masterDataExpanded ? (
-                    <ChevronDown className="w-4 h-4" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4" />
-                  )}
-                </button>
-                
-                {masterDataExpanded && (
-                  <div className="ml-4 mt-2 space-y-1">
-                    <button
-                      onClick={() => {
-                        openOfficeManager();
-                        window.innerWidth < 1024 && onClose();
-                      }}
-                      className="flex items-center w-full px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-md transition-colors duration-200"
-                    >
-                      <Building2 className="w-4 h-4 mr-3" />
-                      Manage Offices
-                    </button>
-                    <button
-                      onClick={() => {
-                        openPositionManager();
-                        window.innerWidth < 1024 && onClose();
-                      }}
-                      className="flex items-center w-full px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-md transition-colors duration-200"
-                    >
-                      <Briefcase className="w-4 h-4 mr-3" />
-                      Manage Positions
-                    </button>
-                    <button
-                      onClick={() => {
-                        openVisaTypeManager();
-                        window.innerWidth < 1024 && onClose();
-                      }}
-                      className="flex items-center w-full px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-md transition-colors duration-200"
-                    >
-                      <CreditCard className="w-4 h-4 mr-3" />
-                      Manage Visas
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
           </nav>
           
           {/* User section */}

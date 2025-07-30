@@ -1,30 +1,31 @@
 const express = require('express');
 const router = express.Router();
 const payrollController = require('../controllers/payrollController');
+const { requireAuth, addUserOffices, requireManager } = require('../middleware/auth');
 
 // Get payroll reports with filters
-router.get('/reports', payrollController.getPayrollReports);
+router.get('/reports', requireAuth, addUserOffices, payrollController.getPayrollReports);
 
 // Get detailed employee payroll data
-router.get('/employee/:employeeId', payrollController.getEmployeePayrollDetails);
+router.get('/employee/:employeeId', requireAuth, addUserOffices, payrollController.getEmployeePayrollDetails);
 
 // Get offices for filter dropdown
-router.get('/offices', payrollController.getOfficesForFilter);
+router.get('/offices', requireAuth, addUserOffices, payrollController.getOfficesForFilter);
 
 // Get positions for filter dropdown
-router.get('/positions', payrollController.getPositionsForFilter);
+router.get('/positions', requireAuth, payrollController.getPositionsForFilter);
 
 // Generate payroll for date range
-router.post('/generate', payrollController.generatePayrollForDateRange);
+router.post('/generate', requireAuth, addUserOffices, payrollController.generatePayrollForDateRange);
 
 // Get attendance days in month
-router.get('/attendance-days', payrollController.getAttendanceDaysInMonth);
+router.get('/attendance-days', requireAuth, addUserOffices, payrollController.getAttendanceDaysInMonth);
 
 // Get employee pending attendance days (FIXED: removed extra /api prefix)
-router.get('/attendance/pending-days', payrollController.getEmployeePendingAttendanceDays);
+router.get('/attendance/pending-days', requireAuth, addUserOffices, payrollController.getEmployeePendingAttendanceDays);
 
-// DELETE ROUTES - Attendance data deletion
-router.delete('/attendance/month', payrollController.deleteAttendanceByMonth);
-router.delete('/attendance/employee-month', payrollController.deleteAttendanceByEmployeeMonth);
+// DELETE ROUTES - Attendance data deletion (Admin only for data deletion)
+router.delete('/attendance/month', requireAuth, requireManager, payrollController.deleteAttendanceByMonth);
+router.delete('/attendance/employee-month', requireAuth, requireManager, payrollController.deleteAttendanceByEmployeeMonth);
 
 module.exports = router;

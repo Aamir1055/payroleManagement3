@@ -303,18 +303,28 @@ module.exports = {
     }
   },
 
-  // -- The rest of your CRUD and summary functions (unchanged) --
+  // -- The rest of your CRUD and summary functions (with office-based filtering) --
   getEmployees: async (req, res) => {
     try {
-      const [employees] = await req.db.query(`
+      const { buildOfficeFilter } = require('../middleware/auth');
+      const { whereClause, params } = buildOfficeFilter(req, 'e');
+      
+      let sql = `
         SELECT e.*, o.name AS office_name, p.title AS position_title,
                op.reporting_time, op.duty_hours, e.visa_type AS visa_type_name
         FROM employees e
         LEFT JOIN offices o ON e.office_id = o.id
         LEFT JOIN positions p ON e.position_id = p.id
         LEFT JOIN office_positions op ON e.office_id = op.office_id AND e.position_id = op.position_id
-        ORDER BY e.employeeId
-      `);
+      `;
+      
+      if (whereClause) {
+        sql += ` WHERE ${whereClause}`;
+      }
+      
+      sql += ` ORDER BY e.employeeId`;
+      
+      const [employees] = await req.db.query(sql, params);
       const processedEmployees = employees.map(emp => ({
         ...emp,
         status: emp.status === 1 || emp.status === true || emp.status === 'active',
@@ -357,7 +367,15 @@ module.exports = {
   },
   getEmployeeCount: async (req, res) => {
     try {
-      const [result] = await req.db.query('SELECT COUNT(*) AS total FROM employees');
+      const { buildOfficeFilter } = require('../middleware/auth');
+      const { whereClause, params } = buildOfficeFilter(req, 'e');
+      
+      let sql = 'SELECT COUNT(*) AS total FROM employees e';
+      if (whereClause) {
+        sql += ` WHERE ${whereClause}`;
+      }
+      
+      const [result] = await req.db.query(sql, params);
       res.json({ total: result[0].total });
     } catch (err) {
       console.error('Error:', err);
@@ -366,7 +384,15 @@ module.exports = {
   },
   getTotalMonthlySalary: async (req, res) => {
     try {
-      const [result] = await req.db.query('SELECT SUM(monthlySalary) AS totalSalary FROM employees WHERE status = 1');
+      const { buildOfficeFilter } = require('../middleware/auth');
+      const { whereClause, params } = buildOfficeFilter(req, 'e');
+      
+      let sql = 'SELECT SUM(monthlySalary) AS totalSalary FROM employees e WHERE e.status = 1';
+      if (whereClause) {
+        sql += ` AND ${whereClause}`;
+      }
+      
+      const [result] = await req.db.query(sql, params);
       res.json({ totalSalary: result[0].totalSalary || 0 });
     } catch (err) {
       console.error('Error:', err);
@@ -375,14 +401,24 @@ module.exports = {
   },
   getSummaryByOffice: async (req, res) => {
     try {
-      const [results] = await req.db.query(`
+      const { buildOfficeFilter } = require('../middleware/auth');
+      const { whereClause, params } = buildOfficeFilter(req, 'o');
+      
+      let sql = `
         SELECT o.id AS office_id, o.name AS office,
           COUNT(e.id) AS totalEmployees,
           SUM(e.monthlySalary) AS totalSalary
         FROM offices o
         LEFT JOIN employees e ON o.id = e.office_id AND e.status = 1
-        GROUP BY o.id
-      `);
+      `;
+      
+      if (whereClause) {
+        sql += ` WHERE ${whereClause}`;
+      }
+      
+      sql += ` GROUP BY o.id`;
+      
+      const [results] = await req.db.query(sql, params);
       res.json(results);
     } catch (err) {
       console.error('Error:', err);
@@ -391,7 +427,16 @@ module.exports = {
   },
   getOfficeOptions: async (req, res) => {
     try {
-      const [results] = await req.db.query('SELECT id, name FROM offices ORDER BY name');
+      const { buildOfficeFilter } = require('../middleware/auth');
+      const { whereClause, params } = buildOfficeFilter(req, 'o');
+      
+      let sql = 'SELECT o.id, o.name FROM offices o';
+      if (whereClause) {
+        sql += ` WHERE ${whereClause}`;
+      }
+      sql += ' ORDER BY o.name';
+      
+      const [results] = await req.db.query(sql, params);
       res.json(results);
     } catch (err) {
       console.error('Error:', err);
@@ -432,6 +477,14 @@ module.exports = {
       }
       const db = req.db;
       const office_id = await getOfficeIdByName(office_name, db);
+      
+      // Check if user has access to this office
+      if (req.userOffices && req.userOffices.length > 0 && req.user.role !== 'admin') {
+        if (!req.userOffices.includes(office_id)) {
+          return res.status(403).json({ error: 'Access denied: You do not have permission to create employees in this office' });
+        }
+      }
+      
       const position_id = await getPositionIdByName(position_name, db);
       let statusValue = 1;
       if (typeof status === 'boolean') statusValue = status ? 1 : 0;

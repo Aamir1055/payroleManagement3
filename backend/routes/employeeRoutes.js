@@ -3,6 +3,7 @@ const router = express.Router();
 const employeeController = require('../controllers/employeeController');
 const multer = require('multer');
 const path = require('path');
+const { requireAuth, addUserOffices, requireManager } = require('../middleware/auth');
 
 // Setup multer for file uploads
 const storage = multer.diskStorage({
@@ -38,23 +39,23 @@ router.post('/import', upload.single('file'), employeeController.importEmployees
 router.post('/import-secondary', upload.single('file'), employeeController.importSecondaryEmployeeData);
 
 // =================== MAIN EMPLOYEE DATA ROUTES ====================
-router.get('/', employeeController.getEmployees);
-router.get('/next-id', employeeController.getNextEmployeeId);
-router.get('/office-position/:officeId/:positionId', employeeController.getOfficePositionData);
-router.get('/count', employeeController.getEmployeeCount);
-router.get('/salary/total', employeeController.getTotalMonthlySalary);
-router.get('/summary-by-office', employeeController.getSummaryByOffice);
+router.get('/', requireAuth, addUserOffices, employeeController.getEmployees);
+router.get('/next-id', requireAuth, employeeController.getNextEmployeeId);
+router.get('/office-position/:officeId/:positionId', requireAuth, employeeController.getOfficePositionData);
+router.get('/count', requireAuth, addUserOffices, employeeController.getEmployeeCount);
+router.get('/salary/total', requireAuth, addUserOffices, employeeController.getTotalMonthlySalary);
+router.get('/summary-by-office', requireAuth, addUserOffices, employeeController.getSummaryByOffice);
 
 // =================== OFFICE/POSITION OPTIONS ROUTES ================
-router.get('/offices/options', employeeController.getOfficeOptions);
-router.get('/positions/options', employeeController.getPositionOptions);
-router.get('/positions/by-office/:officeId', employeeController.getPositionsByOffice);
+router.get('/offices/options', requireAuth, addUserOffices, employeeController.getOfficeOptions);
+router.get('/positions/options', requireAuth, employeeController.getPositionOptions);
+router.get('/positions/by-office/:officeId', requireAuth, employeeController.getPositionsByOffice);
 
 // =================== CRUD (Leave these after static routes) ========
-router.post('/', employeeController.createEmployee);
-router.get('/:employeeId', employeeController.getEmployeeById);
-router.put('/:employeeId', employeeController.updateEmployee);
-router.delete('/:employeeId', employeeController.deleteEmployee);
+router.post('/', requireAuth, addUserOffices, employeeController.createEmployee);
+router.get('/:employeeId', requireAuth, addUserOffices, employeeController.getEmployeeById);
+router.put('/:employeeId', requireAuth, addUserOffices, employeeController.updateEmployee);
+router.delete('/:employeeId', requireAuth, addUserOffices, employeeController.deleteEmployee);
 
 // =================== ERROR HANDLING MIDDLEWARE =====================
 router.use((error, req, res, next) => {

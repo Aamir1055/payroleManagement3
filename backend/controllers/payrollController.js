@@ -180,8 +180,12 @@ const calculateSalaryAndDeductions = (employee, metrics, workingDays) => {
   totalDeductions += metrics.absentDays * perDaySalary;
   totalDeductions += metrics.halfDays * (perDaySalary / 2);
   totalDeductions += metrics.excessLeaves * 2 * perDaySalary;
-  const netSalary = Math.max(0, baseSalary - totalDeductions);
-  return { baseSalary, perDaySalary, totalDeductions, netSalary };
+  
+  // Cap deductions to not exceed base salary
+  const cappedDeductions = Math.min(totalDeductions, baseSalary);
+  const netSalary = baseSalary - cappedDeductions;
+  
+  return { baseSalary, perDaySalary, totalDeductions: cappedDeductions, netSalary };
 };
 
 /* ------------------------------------------------------------------
@@ -217,7 +221,7 @@ const savePayroll = async (p) => {
 const getPayrollReports = async (req, res) => {
   console.log("==> getPayrollReports CALLED");
   try {
-    const { fromDate, toDate, office, position, page = 1, limit = 10 } = req.query;
+    const { fromDate, toDate, office, position, page = 1, pageSize = 10 } = req.query;
     if (!fromDate || !toDate)
       return res.status(400).json({ error: 'From date and to date are required' });
 
@@ -226,22 +230,43 @@ const getPayrollReports = async (req, res) => {
     const workingDays = await fetchWorkingDaysCount(year, month);
     const workingDaysArray = await fetchWorkingDaysArray(year, month);
 
-    let empQuery = `
-      SELECT DISTINCT e.employeeId, e.name, e.email, e.office_id, e.position_id, e.monthlySalary,
-        o.name as officeName, p.title as positionTitle
+    // Get office filter for user access control
+    const { buildOfficeFilter } = require('../middleware/auth');
+    const { whereClause: officeAccessClause, params: officeAccessParams } = buildOfficeFilter(req, 'e');
+
+    // BUILD BASE QUERY AND PARAMS
+    let baseQuery = `
       FROM employees e
       LEFT JOIN offices o ON e.office_id = o.id
       LEFT JOIN positions p ON e.position_id = p.id
       INNER JOIN attendance a ON e.employeeId = a.employee_id AND a.date BETWEEN ? AND ?
       WHERE 1=1
     `;
-    let qParams = [fromDate, toDate];
-    if (office) { empQuery += ' AND o.id=?'; qParams.push(office); }
-    if (position) { empQuery += ' AND p.id=?'; qParams.push(position); }
-    empQuery += ` ORDER BY e.name LIMIT ? OFFSET ?`;
-    qParams.push(parseInt(limit), (page - 1) * limit);
+    let qParams = [fromDate, toDate, ...officeAccessParams];
+    
+    if (officeAccessClause) {
+      baseQuery += ` AND ${officeAccessClause}`;
+    }
+    if (office) { baseQuery += ' AND o.id=?'; qParams.push(office); }
+    if (position) { baseQuery += ' AND p.id=?'; qParams.push(position); }
 
-    const [empRows] = await db.query(empQuery, qParams);
+    // GET TOTAL COUNT
+    const countQuery = `SELECT COUNT(DISTINCT e.employeeId) as totalEmployees ${baseQuery}`;
+    const [countRows] = await db.query(countQuery, qParams);
+    const totalEmployees = countRows[0].totalEmployees;
+
+    // GET PAGINATED EMPLOYEE DATA
+    const empQuery = `
+      SELECT DISTINCT e.employeeId, e.name, e.email, e.office_id, e.position_id, e.monthlySalary,
+        o.name as officeName, p.title as positionTitle
+      ${baseQuery}
+      ORDER BY e.name LIMIT ? OFFSET ?
+    `;
+    const pageNum = parseInt(page);
+    const pageSizeNum = parseInt(pageSize);
+    const offset = (pageNum - 1) * pageSizeNum;
+    
+    const [empRows] = await db.query(empQuery, [...qParams, pageSizeNum, offset]);
     const employees = empRows;
     if (!employees.length)
       return res.json({ success: true, data: [], message: 'No employees found' });
@@ -311,7 +336,7 @@ const getPayrollReports = async (req, res) => {
       success: true,
       data: payrollData,
       summary: {
-        totalEmployees: payrollData.length,
+        totalEmployees: totalEmployees,
         totalNetSalary: totalNetSalary.toFixed(2),
         totalDeductions: totalDeductions.toFixed(2),
         netPayroll: totalNetSalary.toFixed(2),
@@ -335,12 +360,22 @@ const getEmployeePayrollDetails = async (req, res) => {
     if (!fromDate || !toDate)
       return res.status(400).json({ error: 'From date and to date are required' });
 
-    const [empRows] = await db.query(
-      `SELECT employeeId, name, email, office_id, position_id, monthlySalary, joiningDate
-       FROM employees WHERE employeeId = ?`,
-      [employeeId]
-    );
-    if (!empRows.length) return res.status(404).json({ error: 'Employee not found' });
+    // Check office access
+    const { buildOfficeFilter } = require('../middleware/auth');
+    const { whereClause, params } = buildOfficeFilter(req, 'e');
+    
+    let sql = `
+      SELECT e.employeeId, e.name, e.email, e.office_id, e.position_id, e.monthlySalary, e.joiningDate
+      FROM employees e
+      WHERE e.employeeId = ?
+    `;
+    
+    if (whereClause) {
+      sql += ` AND ${whereClause}`;
+    }
+    
+    const [empRows] = await db.query(sql, [employeeId, ...params]);
+    if (!empRows.length) return res.status(404).json({ error: 'Employee not found or access denied' });
     const employee = empRows[0];
 
     const year = moment(fromDate).year();
@@ -443,7 +478,16 @@ const getEmployeePayrollDetails = async (req, res) => {
 ------------------------------------------------------------------ */
 const getOfficesForFilter = async (req, res) => {
   try {
-    const [rows] = await db.query(`SELECT id, name FROM offices ORDER BY name`);
+    const { buildOfficeFilter } = require('../middleware/auth');
+    const { whereClause, params } = buildOfficeFilter(req, 'o');
+    
+    let sql = `SELECT o.id, o.name FROM offices o`;
+    if (whereClause) {
+      sql += ` WHERE ${whereClause}`;
+    }
+    sql += ` ORDER BY o.name`;
+    
+    const [rows] = await db.query(sql, params);
     res.json({ success: true, data: rows });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch offices', details: error.message });
@@ -474,13 +518,27 @@ const getAttendanceDaysInMonth = async (req, res) => {
     if (!year || !month)
       return res.status(400).json({ error: 'year and month required' });
 
-    const [rows] = await db.query(
-      `SELECT DISTINCT DATE(date) AS d
-       FROM attendance
-       WHERE YEAR(date)=? AND MONTH(date)=?
-       ORDER BY d`,
-      [year, month]
-    );
+    // Add office filtering
+    const { buildOfficeFilter } = require('../middleware/auth');
+    const { whereClause, params } = buildOfficeFilter(req, 'e');
+    
+    let sql = `
+      SELECT DISTINCT DATE(a.date) AS d
+      FROM attendance a
+      INNER JOIN employees e ON a.employee_id = e.employeeId
+      WHERE YEAR(a.date)=? AND MONTH(a.date)=?
+    `;
+    
+    let queryParams = [year, month];
+    
+    if (whereClause) {
+      sql += ` AND ${whereClause}`;
+      queryParams.push(...params);
+    }
+    
+    sql += ` ORDER BY d`;
+    
+    const [rows] = await db.query(sql, queryParams);
     const days = rows.map(r => r.d);
     res.json({ success: true, days });
   } catch (error) {

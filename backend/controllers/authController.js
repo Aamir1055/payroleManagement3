@@ -16,7 +16,7 @@ exports.login = async (req, res) => {
   }
 
   try {
-    const users = await query('SELECT * FROM Users WHERE username = ?', [username]);
+    const users = await query('SELECT * FROM users WHERE username = ?', [username]);
 
     if (users.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -82,7 +82,7 @@ exports.login = async (req, res) => {
 exports.generate2FASetup = async (req, res) => {
   try {
     const { userId } = req.user;
-    const users = await query('SELECT username FROM Users WHERE id = ?', [userId]);
+    const users = await query('SELECT username FROM users WHERE id = ?', [userId]);
 
     if (users.length === 0) {
       return res.status(404).json({ error: 'User not found' });
@@ -95,7 +95,7 @@ exports.generate2FASetup = async (req, res) => {
       length: 32
     });
 
-    await query('UPDATE Users SET two_factor_secret = ? WHERE id = ?', [
+    await query('UPDATE users SET two_factor_secret = ? WHERE id = ?', [
       secret.base32,
       userId
     ]);
@@ -132,7 +132,7 @@ exports.verify2FASetup = async (req, res) => {
   }
 
   try {
-    const users = await query('SELECT two_factor_secret FROM Users WHERE id = ?', [userId]);
+    const users = await query('SELECT two_factor_secret FROM users WHERE id = ?', [userId]);
 
     if (users.length === 0 || !users[0].two_factor_secret) {
       return res.status(400).json({ error: '2FA setup not found. Generate setup first.' });
@@ -149,7 +149,7 @@ exports.verify2FASetup = async (req, res) => {
       return res.status(400).json({ error: 'Invalid verification code' });
     }
 
-    await query('UPDATE Users SET two_factor_enabled = TRUE WHERE id = ?', [userId]);
+    await query('UPDATE users SET two_factor_enabled = TRUE WHERE id = ?', [userId]);
 
     res.json({ message: '2FA enabled successfully', enabled: true });
   } catch (error) {
@@ -168,7 +168,7 @@ exports.disable2FA = async (req, res) => {
   }
 
   try {
-    const users = await query('SELECT password, two_factor_secret FROM Users WHERE id = ?', [userId]);
+    const users = await query('SELECT password, two_factor_secret FROM users WHERE id = ?', [userId]);
     if (users.length === 0) return res.status(404).json({ error: 'User not found' });
 
     const user = users[0];
@@ -185,7 +185,7 @@ exports.disable2FA = async (req, res) => {
     if (!verified) return res.status(400).json({ error: 'Invalid 2FA token' });
 
     await query(
-      'UPDATE Users SET two_factor_enabled = FALSE, two_factor_secret = NULL WHERE id = ?',
+      'UPDATE users SET two_factor_enabled = FALSE, two_factor_secret = NULL WHERE id = ?',
       [userId]
     );
 
@@ -212,7 +212,7 @@ exports.register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await query(
-      'INSERT INTO Users (username, password, role, employee_id) VALUES (?, ?, ?, ?)',
+      'INSERT INTO users (username, password, role, employee_id) VALUES (?, ?, ?, ?)',
       [username, hashedPassword, role, employeeId || null]
     );
 
@@ -232,7 +232,7 @@ exports.getProfile = async (req, res) => {
 
   try {
     const users = await query(
-      'SELECT id, username, role,two_factor_enabled, created_at FROM Users WHERE id = ?',
+      'SELECT id, username, role,two_factor_enabled, created_at FROM users WHERE id = ?',
       [userId]
     );
 

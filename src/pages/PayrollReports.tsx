@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '../components/Layout/MainLayout';
 import axios from '../api/axios';
@@ -56,6 +56,7 @@ const PayrollReports: React.FC = () => {
   const [noData, setNoData] = useState(false);
   // NEW STATE: For delete operations
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const isInitial = useRef(true);
 
   const pageSizes = [10, 30, 50, 70, 100, 150, 200, 300, 400, 500];
   const [page, setPage] = useState(1);
@@ -100,7 +101,7 @@ const PayrollReports: React.FC = () => {
     try {
       const fromDate = moment(selectedMonth).startOf('month').format('YYYY-MM-DD');
       const toDate = moment(selectedMonth).endOf('month').format('YYYY-MM-DD');
-      const params: any = { fromDate, toDate };
+      const params: any = { fromDate, toDate, page, pageSize };
       if (officeId) params.office = officeId;
       if (positionId) params.position = positionId;
       const res = await axios.get('/api/payroll/reports', { params });
@@ -207,6 +208,15 @@ const PayrollReports: React.FC = () => {
     const qs = buildQS();
     window.history.replaceState(null, '', qs ? `?${qs}` : undefined);
   }, [selectedMonth, officeId, positionId, page, pageSize]);
+
+  useEffect(() => {
+    if (isInitial.current) {
+      isInitial.current = false;
+      return;
+    }
+    fetchPayrollReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize]);
 
   return (
     <MainLayout title="Payroll Reports" subtitle="View and manage employee payroll reports">
@@ -465,7 +475,7 @@ const PayrollReports: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {payrollData.slice((page - 1) * pageSize, page * pageSize).map((emp, i) => (
+                  {payrollData.map((emp, i) => (
                     <tr
                       key={emp.employeeId}
                       className="hover:bg-blue-50 cursor-pointer transition"
@@ -517,7 +527,7 @@ const PayrollReports: React.FC = () => {
             {/* PAGINATION */}
             <div className="flex flex-wrap items-center justify-between px-6 py-3 border-t bg-gradient-to-r from-gray-50 to-blue-50">
               <div className="text-gray-600 text-sm">
-                Showing <span className="font-bold">{(page - 1) * pageSize + 1}</span>–<span className="font-bold">{Math.min(page * pageSize, payrollData.length)}</span> of <span className="font-bold">{payrollData.length}</span> employees
+                Showing <span className="font-bold">{summary ? (page - 1) * pageSize + 1 : 0}</span>–<span className="font-bold">{summary ? (page - 1) * pageSize + payrollData.length : 0}</span> of <span className="font-bold">{summary ? summary.totalEmployees : 0}</span> employees
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -528,26 +538,28 @@ const PayrollReports: React.FC = () => {
                   Previous
                 </button>
                 <span className="bg-white rounded px-3 py-1.5 border border-gray-200 text-gray-700 text-xs font-medium">
-                  Page {page} of {Math.max(1, Math.ceil(payrollData.length / pageSize))}
+                  Page {page} of {summary ? Math.max(1, Math.ceil(summary.totalEmployees / pageSize)) : 1}
                 </span>
                 <button
                   className="px-4 py-1.5 rounded bg-white border border-gray-200 hover:bg-blue-100 text-gray-700 font-semibold text-xs disabled:opacity-60 disabled:cursor-not-allowed"
                   onClick={() => setPage((p) => p + 1)}
-                  disabled={page === Math.ceil(payrollData.length / pageSize) || payrollData.length === 0}
+                  disabled={!summary || page >= Math.ceil(summary.totalEmployees / pageSize)}
                 >
                   Next
                 </button>
                 <select
                   value={pageSize}
-                  onChange={e => {
+                  onChange={(e) => {
                     setPageSize(+e.target.value);
                     setPage(1);
                   }}
                   className="ml-2 px-2 py-1.5 rounded border border-gray-200 bg-white text-xs font-medium text-gray-700"
                 >
-                  {pageSizes.map(ps =>
-                    <option key={ps} value={ps}>{ps}/page</option>
-                  )}
+                  {pageSizes.map((ps) => (
+                    <option key={ps} value={ps}>
+                      {ps}/page
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
