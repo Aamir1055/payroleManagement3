@@ -72,11 +72,9 @@ exports.getWorkingDays = async (req, res) => {
 
     // Convert holiday dates to YYYY-MM-DD strings for easy checking
     const holidayDates = new Set(holidayResults.map(row => {
-      // If row.date is a Date object:
       if (row.date instanceof Date) {
         return formatDateAsLocalYYYYMMDD(row.date);
       }
-      // In case of string, return as is
       return row.date;
     }));
 
@@ -108,7 +106,7 @@ exports.getWorkingDays = async (req, res) => {
       sundays,
       holidays: holidaysCount,
       workingDays: workingDaysCount,
-      days: workingDaysList // This array is critical for attendance validation
+      days: workingDaysList 
     });
   } catch (err) {
     console.error('Error calculating working days:', err);

@@ -36,8 +36,30 @@ const roleRoutes = require('./routes/roleRoutes');
 const flushRoutes = require('./routes/flushRoutes'); // NEW
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
+
+// Request logging for debugging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  if (req.path.includes('2fa')) {
+    console.log('2FA Request:', {
+      method: req.method,
+      path: req.path,
+      headers: {
+        authorization: req.headers.authorization ? 'Bearer [token]' : 'none',
+        'content-type': req.headers['content-type']
+      },
+      body: req.method === 'POST' ? req.body : 'N/A'
+    });
+  }
+  next();
+});
 
 // Health check endpoint (public)
 app.get('/api/health', (req, res) => {

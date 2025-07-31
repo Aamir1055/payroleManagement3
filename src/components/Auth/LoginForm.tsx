@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Shield, User, Lock, Smartphone } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 interface LoginFormProps {
   onLogin: (credentials: LoginCredentials) => void;
@@ -14,6 +15,7 @@ interface LoginCredentials {
 }
 
 export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading, error }) => {
+  const { loginWith2FA, loading: authLoading, error: authError, requiresTwoFactor, resetTwoFactor } = useAuth();
   const [credentials, setCredentials] = useState<LoginCredentials>({
     username: '',
     password: '',
@@ -24,7 +26,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading, error })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin(credentials);
+    if (requiresTwoFactor) {
+      loginWith2FA(credentials.twoFactorCode || '');
+    } else {
+      onLogin(credentials);
+    }
   };
 
   const handleInputChange = (field: keyof LoginCredentials, value: string) => {
@@ -45,11 +51,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading, error })
         </div>
 
         {/* Error Message */}
-        {error && (
+        {(authError || error) && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
             <div className="flex items-center">
               <div className="text-red-600 mr-2">⚠️</div>
-              <div className="text-red-700 text-sm">{error}</div>
+              <div className="text-red-700 text-sm">{authError || error}</div>
             </div>
           </div>
         )}

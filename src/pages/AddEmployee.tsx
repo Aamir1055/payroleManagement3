@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { MainLayout } from '../components/Layout/MainLayout';
 import EmployeeForm from '../components/Employees/EmployeeForm';
 import { useEmployees } from '../hooks/useEmployees';
+import { useToast } from '../components/UI/ToastContainer';
 import { Employee } from '../types';
 
 const EmployeePage: React.FC = () => {
@@ -16,6 +17,7 @@ const EmployeePage: React.FC = () => {
   const [employee, setEmployee] = useState<Employee | undefined>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { showSuccess, showError } = useToast();
 
   // Determine mode based on URL
   const pathname = location.pathname.toLowerCase();
@@ -36,12 +38,19 @@ const EmployeePage: React.FC = () => {
   }, [employeeId, employees, fetchEmployeeById]);
 
   const handleSubmit = async (data: any) => {
-    if (isEditMode && employeeId) {
-      await updateEmployee(employeeId, data);
-    } else if (isAddMode) {
-      await addEmployee(data);
+    try {
+      if (isEditMode && employeeId) {
+        await updateEmployee(employeeId, data);
+        showSuccess('Success', `Employee ${data.name || employeeId} has been updated successfully!`);
+      } else if (isAddMode) {
+        await addEmployee(data);
+        showSuccess('Success', `Employee ${data.name || data.employeeId} has been added successfully!`);
+      }
+      navigate('/employees');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      showError('Error', `Failed to ${isEditMode ? 'update' : 'add'} employee: ${errorMessage}`);
     }
-    navigate('/employees');
   };
 
   const pageTitle =

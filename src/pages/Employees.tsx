@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { MainLayout } from '../components/Layout/MainLayout';
 import { EmployeeTable } from '../components/Employees/EmployeeTable';
 import { useEmployees } from '../hooks/useEmployees';
+import { useToast } from '../components/UI/ToastContainer';
 import { Plus, Download, Users, Upload, XCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -35,6 +36,7 @@ export const Employees: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
 
   const navigate = useNavigate();
+  const { showSuccess, showError } = useToast();
 
   const normalizedEmployees = employees.map((emp) => ({
     ...emp,
@@ -80,11 +82,22 @@ export const Employees: React.FC = () => {
     }
     const exportData = filteredEmployees.map((emp) => ({
       'Employee ID': emp.employeeId,
-      Name: emp.name,
-      Email: emp.email,
-      Office: getDisplayName(emp.office_name, 'name', 'office_name'),
+      'Name': emp.name,
+      'Email': emp.email,
+      'Office': getDisplayName(emp.office_name, 'name', 'office_name'),
+      'Position': emp.position_title || emp.position_name || '',
       'Monthly Salary (AED)': Number(emp.monthlySalary).toFixed(2),
-      Status: emp.status ? 'Active' : 'Inactive',
+      'Joining Date': emp.joiningDate ? new Date(emp.joiningDate).toISOString().split('T')[0] : '',
+      'Status': emp.status ? 'Active' : 'Inactive',
+      'Date of Birth': emp.dob ? new Date(emp.dob).toISOString().split('T')[0] : '',
+      'Passport Number': emp.passport_number || '',
+      'Passport Expiry': emp.passport_expiry ? new Date(emp.passport_expiry).toISOString().split('T')[0] : '',
+      'Visa Type': emp.visa_type_name || emp.visa_type || '',
+      'Address': emp.address || '',
+      'Phone': emp.phone || '',
+      'Gender': emp.gender || '',
+      'Reporting Time': emp.reporting_time || '',
+      'Duty Hours': emp.duty_hours ? `${emp.duty_hours} hours` : '',
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -147,11 +160,17 @@ export const Employees: React.FC = () => {
   };
 
   const handleDeleteEmployee = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this employee?')) {
+    // Find the employee to get their name for the message
+    const employeeToDelete = filteredEmployees.find(emp => emp.employeeId === id);
+    const employeeName = employeeToDelete?.name || id;
+    
+    if (window.confirm(`Are you sure you want to delete employee ${employeeName}?`)) {
       try {
         await deleteEmployee(id);
+        showSuccess('Success', `Employee ${employeeName} has been deleted successfully!`);
       } catch (error) {
-        console.error('Error deleting employee:', error);
+        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+        showError('Error', `Failed to delete employee ${employeeName}: ${errorMessage}`);
       }
     }
   };

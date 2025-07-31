@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { MainLayout } from '../components/Layout/MainLayout';
 import axios from '../api/axios';
 import moment from 'moment';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 
 interface DailyRow {
   employeeId: string;
@@ -358,6 +360,34 @@ const EmployeePayrollDetails: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
               Add Attendance
+            </button>
+            <button
+              onClick={() => {
+                if (dailyRows.length === 0) return;
+                const exportData = dailyRows.map(row => ({
+                  Date: moment(row.date).format('YYYY-MM-DD'),
+                  'Punch In': row.punch_in,
+                  'Punch Out': row.punch_out,
+                  'Working Hours': row.workingHours,
+                  'Present Days': row.presentDays,
+                  'Late Days': row.lateDays,
+                  'Half Days': row.halfDays,
+                  'Absent Days': row.absentDays,
+                  'Excess Leaves': row.excessLeaves
+                }));
+                const worksheet = XLSX.utils.json_to_sheet(exportData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Employee Attendance");
+                const xlsbData = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+                saveAs(new Blob([xlsbData], { type: "application/octet-stream" }), `${employee?.name}_Attendance_${selectedMonth}.xlsx`);
+              }}
+              disabled={dailyRows.length === 0}
+              className="flex items-center gap-2 px-4 py-1.5 font-semibold bg-blue-500 text-white rounded hover:bg-blue-600 transition focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+              </svg>
+              Export to Excel
             </button>
           </div>
         </div>

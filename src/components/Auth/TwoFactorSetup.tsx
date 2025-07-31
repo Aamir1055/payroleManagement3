@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Smartphone, Check, Copy, Download, AlertTriangle } from 'lucide-react';
+import { api } from '../../services/api';
 
 interface TwoFactorSetupProps {
   onComplete: () => void;
@@ -21,26 +22,17 @@ export const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete, onCa
 
   const generateQRCode = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/auth/2fa/setup', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate QR code');
-      }
+      const response = await api.get('/auth/2fa/setup');
+      const data = response.data;
 
       setQrCode(data.qrCode);
       setSecret(data.secret);
       setBackupCodes(data.backupCodes || []);
       setStep('setup');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating QR code:', error);
-      setError(error instanceof Error ? error.message : 'Failed to setup 2FA');
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to setup 2FA';
+      setError(errorMessage);
     }
   };
 
@@ -54,26 +46,12 @@ export const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete, onCa
       setLoading(true);
       setError('');
 
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/auth/2fa/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ token: verificationCode })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Verification failed');
-      }
-
+      await api.post('/auth/2fa/verify', { token: verificationCode });
       setStep('complete');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error verifying 2FA:', error);
-      setError(error instanceof Error ? error.message : 'Verification failed');
+      const errorMessage = error.response?.data?.error || error.message || 'Verification failed';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

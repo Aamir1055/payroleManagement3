@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '../components/Layout/MainLayout';
 import axios from '../api/axios';
 import moment from 'moment';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 
 interface PayrollEntry {
   employeeId: string;
@@ -280,8 +282,24 @@ const PayrollReports: React.FC = () => {
                 ))}
               </select>
             </div>
-            {/* Generate */}
-            <div className="flex items-end">
+            {/* Generate & Export */}
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  const worksheet = XLSX.utils.json_to_sheet(payrollData);
+                  const workbook = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(workbook, worksheet, "Payroll Data");
+                  const xlsbData = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+                  saveAs(new Blob([xlsbData], { type: "application/octet-stream" }), `Payroll_Report_${selectedMonth}.xlsx`);
+                }}
+                disabled={loading || payrollData.length === 0}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-md transition-all shadow disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                </svg>
+                Export to Excel
+              </button>
               <button
                 onClick={fetchPayrollReports}
                 disabled={loading}
@@ -291,7 +309,7 @@ const PayrollReports: React.FC = () => {
                   <span className="flex items-center justify-center gap-2">
                     <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                     Loading...
                   </span>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MainLayout } from '../components/Layout/MainLayout';
 import { TwoFactorSetup } from '../components/Auth/TwoFactorSetup';
+import { TwoFactorDisable } from '../components/Auth/TwoFactorDisable';
 import { User, Shield, Key, Check, X, Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -18,6 +19,7 @@ export const Profile: React.FC = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [show2FASetup, setShow2FASetup] = useState(false);
+  const [show2FADisable, setShow2FADisable] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -48,6 +50,11 @@ export const Profile: React.FC = () => {
 
   const handle2FAComplete = () => {
     setShow2FASetup(false);
+    fetchProfile(); // Refresh profile to show updated 2FA status
+  };
+
+  const handle2FADisableComplete = () => {
+    setShow2FADisable(false);
     fetchProfile(); // Refresh profile to show updated 2FA status
   };
 
@@ -152,7 +159,7 @@ export const Profile: React.FC = () => {
                       <span className="text-sm font-medium">Enabled</span>
                     </div>
                     <button
-                      onClick={() => {/* TODO: Implement disable 2FA */}}
+                      onClick={() => setShow2FADisable(true)}
                       className="text-red-600 hover:text-red-800 text-sm"
                     >
                       Disable
@@ -309,6 +316,14 @@ export const Profile: React.FC = () => {
         <TwoFactorSetup 
           onComplete={handle2FAComplete}
           onCancel={() => setShow2FASetup(false)}
+        />
+      )}
+
+      {/* 2FA Disable Modal */}
+      {show2FADisable && (
+        <TwoFactorDisable 
+          onComplete={handle2FADisableComplete}
+          onCancel={() => setShow2FADisable(false)}
         />
       )}
     </MainLayout>

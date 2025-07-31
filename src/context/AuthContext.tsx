@@ -11,17 +11,28 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   login: (credentials: LoginCredentials) => Promise<boolean>;
+  loginWith2FA: (twoFactorCode: string) => Promise<boolean>;
   logout: () => void;
   loading: boolean;
   error: string | null;
   hasPermission: (permission: string) => boolean;
   isAuthenticated: boolean;
+  requiresTwoFactor: boolean;
+  resetTwoFactor: () => void;
 }
 
 export interface LoginCredentials {
   username: string;
   password: string;
   twoFactorCode?: string;
+}
+
+interface LoginResponse {
+  token?: string;
+  user?: User;
+  requiresTwoFactor?: boolean;
+  message?: string;
+  error?: string;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -42,6 +53,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
+  const [tempCredentials, setTempCredentials] = useState<{username: string, password: string} | null>(null);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -73,20 +86,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         body: JSON.stringify(credentials),
       });
 
-      const data = await response.json();
+      const data: LoginResponse = await response.json();
 
       if (!response.ok) {
         setError(data.error || 'Login failed');
         return false;
       }
 
-      // Store token and user data
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      
-      setUser(data.user);
-      setError(null);
-      return true;
+      // Check if 2FA is required
+      if (data.requiresTwoFactor) {
+        setRequiresTwoFactor(true);
+        setTempCredentials({ username: credentials.username, password: credentials.password });
+        setError('Please enter your 2FA code to continue.');
+        return false; // Don't complete login yet
+      }
+
+      // Complete login - store token and user data
+      if (data.token && data.user) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        setUser(data.user);
+        setError(null);
+        setRequiresTwoFactor(false);
+        setTempCredentials(null);
+        return true;
+      }
+
+      setError('Invalid login response');
+      return false;
 
     } catch (error) {
       console.error('Login error:', error);
@@ -97,11 +124,71 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const loginWith2FA = async (twoFactorCode: string): Promise<boolean> => {
+    if (!tempCredentials) {
+      setError('No pending login session');
+      return false;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: tempCredentials.username,
+          password: tempCredentials.password,
+          twoFactorCode
+        }),
+      });
+
+      const data: LoginResponse = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Login failed');
+        return false;
+      }
+
+      // Complete login - store token and user data
+      if (data.token && data.user) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        setUser(data.user);
+        setError(null);
+        setRequiresTwoFactor(false);
+        setTempCredentials(null);
+        return true;
+      }
+
+      setError('Invalid login response');
+      return false;
+
+    } catch (error) {
+      console.error('2FA login error:', error);
+      setError('Network error. Please try again.');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetTwoFactor = () => {
+    setRequiresTwoFactor(false);
+    setTempCredentials(null);
+    setError(null);
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
     setError(null);
+    setRequiresTwoFactor(false);
+    setTempCredentials(null);
   };
 
   const hasPermission = (permission: string): boolean => {
@@ -145,11 +232,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const value: AuthContextType = {
     user,
     login,
+    loginWith2FA,
     logout,
     loading,
     error,
     hasPermission,
     isAuthenticated: !!user,
+    requiresTwoFactor,
+    resetTwoFactor,
   };
 
   return (
