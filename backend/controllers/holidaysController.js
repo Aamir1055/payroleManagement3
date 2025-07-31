@@ -1,5 +1,13 @@
 const { query } = require('../utils/dbPromise');
 
+// Helper function to format date as local YYYY-MM-DD string (avoid timezone issues)
+function formatDateAsLocalYYYYMMDD(date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 // Get all holidays
 exports.getAllHolidays = async (req, res) => {
   try {
@@ -23,7 +31,7 @@ exports.getHolidaysByMonth = async (req, res) => {
     const paddedMonth = String(month).padStart(2, '0');
     const startDate = `${year}-${paddedMonth}-01`;
     const endDate = `${year}-${paddedMonth}-31`;
-    
+
     const results = await query(
       'SELECT * FROM holidays WHERE date BETWEEN ? AND ? ORDER BY date ASC',
       [startDate, endDate]
@@ -44,8 +52,8 @@ exports.getWorkingDays = async (req, res) => {
   }
 
   try {
-    const monthNum = parseInt(month);
-    const yearNum = parseInt(year);
+    const monthNum = parseInt(month, 10);
+    const yearNum = parseInt(year, 10);
 
     if (isNaN(monthNum) || isNaN(yearNum) || monthNum < 1 || monthNum > 12) {
       return res.status(400).json({ error: 'Invalid month or year' });
@@ -125,7 +133,7 @@ exports.updateHoliday = async (req, res) => {
   const { id } = req.params;
   const { name, date, reason } = req.body;
 
-  if (!name && !date && !reason ) {
+  if (!name && !date && !reason) {
     return res.status(400).json({ error: 'At least one field is required to update' });
   }
 
@@ -195,12 +203,12 @@ exports.deleteHoliday = async (req, res) => {
 exports.getUpcomingHolidays = async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    
+
     const results = await query(
       'SELECT * FROM holidays WHERE date >= ? ORDER BY date ASC LIMIT 10',
       [today]
     );
-    
+
     res.json(results);
   } catch (err) {
     console.error('Error fetching upcoming holidays:', err);
