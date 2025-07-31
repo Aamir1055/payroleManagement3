@@ -61,31 +61,54 @@ exports.getWorkingDays = async (req, res) => {
 
     const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
 
-    // Count Sundays
-    let sundays = 0;
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(yearNum, monthNum - 1, day);
-      if (date.getDay() === 0) sundays++;
-    }
-
     const startDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-01`;
     const endDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-${daysInMonth}`;
 
-    const results = await query(
-      'SELECT COUNT(*) as holidayCount FROM holidays WHERE date BETWEEN ? AND ?',
+    // Get all holiday dates for the month
+    const holidayResults = await query(
+      'SELECT date FROM holidays WHERE date BETWEEN ? AND ?',
       [startDate, endDate]
     );
 
-    const holidays = results[0].holidayCount || 0;
-    const workingDays = Math.max(daysInMonth - sundays - holidays, 0);
+    // Convert holiday dates to YYYY-MM-DD strings for easy checking
+    const holidayDates = new Set(holidayResults.map(row => {
+      // If row.date is a Date object:
+      if (row.date instanceof Date) {
+        return formatDateAsLocalYYYYMMDD(row.date);
+      }
+      // In case of string, return as is
+      return row.date;
+    }));
+
+    let sundays = 0;
+    const workingDaysList = [];
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(yearNum, monthNum - 1, day);
+      const dateString = formatDateAsLocalYYYYMMDD(date);
+      const isSunday = date.getDay() === 0;
+      const isHoliday = holidayDates.has(dateString);
+
+      if (isSunday) {
+        sundays++;
+      }
+
+      if (!isSunday && !isHoliday) {
+        workingDaysList.push(dateString);
+      }
+    }
+
+    const holidaysCount = holidayResults.length;
+    const workingDaysCount = workingDaysList.length;
 
     res.json({
       month: monthNum,
       year: yearNum,
       totalDays: daysInMonth,
       sundays,
-      holidays,
-      workingDays
+      holidays: holidaysCount,
+      workingDays: workingDaysCount,
+      days: workingDaysList // This array is critical for attendance validation
     });
   } catch (err) {
     console.error('Error calculating working days:', err);
