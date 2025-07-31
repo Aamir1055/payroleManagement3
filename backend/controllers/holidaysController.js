@@ -106,7 +106,7 @@ exports.getWorkingDays = async (req, res) => {
       sundays,
       holidays: holidaysCount,
       workingDays: workingDaysCount,
-      days: workingDaysList 
+      days: workingDaysList
     });
   } catch (err) {
     console.error('Error calculating working days:', err);
