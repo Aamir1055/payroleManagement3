@@ -19,6 +19,8 @@ export interface Employee {
   visa_type?: number; // This stores the ID
   visa_type_name?: string; // This stores the actual visa type name
   visa_type_id?: number; // For form handling
+  platform?: string; // This stores the platform name
+  platform_id?: number; // For form handling
   address?: string;
   phone?: string;
   gender?: string;
@@ -59,6 +61,13 @@ export interface Office {
   id: string;
   name: string;
   location: string;
+}
+
+export interface Platform {
+  id: number;
+  platform_name: string;
+  created_at: string;
+  employeeCount?: number;
 }
 
 export interface User {

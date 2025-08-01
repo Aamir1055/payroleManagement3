@@ -8,6 +8,7 @@ import AddEmployeePage from './pages/AddEmployee';
 import { Dashboard } from './pages/Dashboard';
 import { Employees } from './pages/Employees';
 import PayrollReports from './pages/PayrollReports';
+import { DashboardByPlatform } from './pages/DashboardByPlatform';
 import EmployeePayrollDetails from './pages/EmployeePayrollDetails';
 import { Holidays } from './pages/holidays';
 import { Profile } from './pages/Profile';
@@ -115,6 +116,15 @@ const AppRoutes: React.FC = () => {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/dashboard-by-platform"
+        element={
+          <ProtectedRoute>
+            <DashboardByPlatform />
+          </ProtectedRoute>
+        }
+      />
+
       <Route
         path="/employees"
         element={

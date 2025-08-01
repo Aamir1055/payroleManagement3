@@ -15,6 +15,7 @@ import {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Dashboard by Platform', href: '/dashboard-by-platform', icon: LayoutDashboard },
   { name: 'Employees', href: '/employees', icon: Users },
   { name: 'Payroll', href: '/payroll', icon: DollarSign },
   { name: 'Holidays', href: '/api/holidays', icon: Calendar },

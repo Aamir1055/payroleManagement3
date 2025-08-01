@@ -559,6 +559,122 @@ exports.deleteVisaType = async (req, res) => {
   }
 };
 
+// ================ PLATFORM CONTROLLERS ================
+
+// Get all platforms
+exports.getAllPlatforms = async (req, res) => {
+  try {
+    const results = await query(`
+      SELECT 
+        p.id,
+        p.platform_name,
+        p.created_at,
+        (
+          SELECT COUNT(*)
+          FROM employees e
+          WHERE e.platform = p.platform_name
+        ) as employeeCount
+      FROM platforms p
+      ORDER BY p.platform_name
+    `);
+    res.json(results);
+  } catch (err) {
+    console.error('Error fetching platforms:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Create a new platform
+exports.createPlatform = async (req, res) => {
+  try {
+    const { platform_name } = req.body;
+    
+    if (!platform_name) {
+      return res.status(400).json({ error: 'Platform name is required' });
+    }
+    
+    const result = await query(
+      'INSERT INTO platforms (platform_name) VALUES (?)', 
+      [platform_name]
+    );
+    
+    res.status(201).json({ 
+      id: result.insertId, 
+      platform_name,
+      message: 'Platform created successfully'
+    });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Platform name already exists' });
+    }
+    console.error('Error creating platform:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Update a platform
+exports.updatePlatform = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { platform_name } = req.body;
+    
+    if (!platform_name) {
+      return res.status(400).json({ error: 'Platform name is required' });
+    }
+    
+    const result = await query(
+      'UPDATE platforms SET platform_name = ? WHERE id = ?', 
+      [platform_name, id]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Platform not found' });
+    }
+    
+    res.json({ 
+      id: parseInt(id), 
+      platform_name,
+      message: 'Platform updated successfully'
+    });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Platform name already exists' });
+    }
+    console.error('Error updating platform:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Delete a platform
+exports.deletePlatform = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if platform has employees
+    const employeeCheck = await query(
+      'SELECT COUNT(*) as count FROM employees WHERE platform = (SELECT platform_name FROM platforms WHERE id = ?)', 
+      [id]
+    );
+    
+    if (employeeCheck[0].count > 0) {
+      return res.status(400).json({ 
+        error: 'Cannot delete platform with active employees. Please reassign employees first.' 
+      });
+    }
+    
+    const result = await query('DELETE FROM platforms WHERE id = ?', [id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Platform not found' });
+    }
+    
+    res.json({ message: 'Platform deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting platform:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // ================ DASHBOARD CONTROLLERS ================
 
 // Dashboard summary

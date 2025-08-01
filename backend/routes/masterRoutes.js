@@ -22,6 +22,12 @@ router.put('/positions/:id', masterController.updatePosition);
 router.delete('/positions/:id', masterController.deletePosition);
 router.post('/office-specific-position', masterController.createOfficeSpecificPosition);
 
+// -------- PLATFORM ROUTES --------
+router.get('/platforms', masterController.getAllPlatforms);
+router.post('/platforms', masterController.createPlatform);
+router.put('/platforms/:id', masterController.updatePlatform);
+router.delete('/platforms/:id', masterController.deletePlatform);
+
 // -------- VISA TYPE ROUTES --------
 router.get('/visa-types', masterController.getAllVisaTypes);
 router.post('/visa-types', masterController.createVisaType);

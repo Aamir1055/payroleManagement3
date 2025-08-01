@@ -15,6 +15,10 @@ interface VisaType {
   id: number;
   typeofvisa: string;
 }
+interface Platform {
+  id: number;
+  platform_name: string;
+}
 interface EmployeeFormProps {
   employee?: Employee;
   onSubmit?: (data: any) => Promise<any> | void;
@@ -37,6 +41,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
   const [allPositions, setAllPositions] = useState<Position[]>([]);
   const [filteredPositions, setFilteredPositions] = useState<Position[]>([]);
   const [visaTypes, setVisaTypes] = useState<VisaType[]>([]);
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [reportingTime, setReportingTime] = useState<string>('Select office and position');
   const [dutyHours, setDutyHours] = useState<string>('Select office and position');
@@ -67,6 +72,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
       passport_expiry: '',
       visa_type_id: 0,
       visa_type: '',
+      platform_id: 0,
+      platform: '',
       address: '',
       phone: '',
       gender: '',
@@ -95,15 +102,17 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
   useEffect(() => {
     const fetchOptions = async () => {
       try {
-        const [officesRes, positionsRes, visaTypesRes] = await Promise.all([
+        const [officesRes, positionsRes, visaTypesRes, platformsRes] = await Promise.all([
           fetch('/api/employees/offices/options', { headers: getAuthHeaders() }),
           fetch('/api/employees/positions/options', { headers: getAuthHeaders() }),
           fetch('/api/masters/visa-types', { headers: getAuthHeaders() }),
+          fetch('/api/employees/platforms/options', { headers: getAuthHeaders() }),
         ]);
 
         let officesData: Office[] = [];
         let positionsData: Position[] = [];
         let visaTypesData: VisaType[] = [];
+        let platformsData: Platform[] = [];
 
         if (officesRes.ok) {
           officesData = await officesRes.json();
@@ -117,6 +126,10 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
         if (visaTypesRes.ok) {
           visaTypesData = await visaTypesRes.json();
           setVisaTypes(visaTypesData);
+        }
+        if (platformsRes.ok) {
+          platformsData = await platformsRes.json();
+          setPlatforms(platformsData);
         }
 
         if (employee) {
@@ -132,6 +145,10 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
             v.typeofvisa === employee.visa_type_name ||
             v.id === employee.visa_type
           );
+          const platformObj = platformsData.find(p =>
+            p.platform_name === employee.platform ||
+            p.id === employee.platform_id
+          );
           let statusBoolean = true;
           if (typeof employee.status === 'boolean') {
             statusBoolean = employee.status;
@@ -146,6 +163,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
             office_id: officeObj?.id ?? 0,
             position_id: positionObj?.id ?? 0,
             visa_type_id: visaTypeObj?.id ?? 0,
+            platform_id: platformObj?.id ?? 0,
             office_name: employee.office_name || officeObj?.name || '',
             position_name: employee.position_name || employee.position_title || positionObj?.title || '',
             joiningDate: employee.joiningDate ? employee.joiningDate.split('T')[0] : '',
@@ -154,6 +172,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
             passport_number: employee.passport_number || '',
             passport_expiry: employee.passport_expiry ? employee.passport_expiry.split('T')[0] : '',
             visa_type: employee.visa_type || visaTypeObj?.typeofvisa || '',
+            platform: employee.platform || platformObj?.platform_name || '',
             address: employee.address || '',
             phone: employee.phone || '',
             gender: employee.gender || '',
@@ -247,6 +266,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
       const office = offices.find(o => String(o.id) === String(formData.office_id));
       const position = filteredPositions.find(p => String(p.id) === String(formData.position_id));
       const visaType = visaTypes.find(v => String(v.id) === String(formData.visa_type_id));
+      const platform = platforms.find(p => String(p.id) === String(formData.platform_id));
       const completeEmployeeData: any = {
         employeeId: formData.employeeId,
         name: formData.name,
@@ -260,6 +280,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
         passport_number: formData.passport_number || null,
         passport_expiry: formData.passport_expiry || null,
         visa_type: visaType?.typeofvisa || null,
+        platform: platform?.platform_name || null,
         address: formData.address || null,
         phone: formData.phone || null,
         gender: formData.gender || null,
@@ -472,6 +493,24 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
           className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100"
         />
       </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Platform</label>
+        <select
+          {...register('platform_id', {
+            setValueAs: value => value === '' ? 0 : parseInt(value, 10)
+          })}
+          disabled={viewOnly}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+        >
+          <option value={0}>Select Platform</option>
+          {platforms.map(platform => (
+            <option key={platform.id} value={platform.id}>
+              {platform.platform_name}
+            </option>
+          ))}
+        </select>
+      </div>
     </>
   );
 
@@ -512,11 +551,10 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
           ))}
         </select>
       </div>
-    </>
-  );
+      </>
+    );
 
   // --- GROUPED FIELDS END ---
-
   const allGroupedFields = (
     <>
       {/* Status/Snackbar Message */}

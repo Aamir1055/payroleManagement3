@@ -2,7 +2,7 @@ import React from 'react';
 import { Edit, Trash2, Eye } from 'lucide-react';
 
 interface MasterDataTableProps {
-  dataType: 'office' | 'position' | 'visaType';
+  dataType: 'office' | 'position' | 'visaType' | 'platform';
   data: any[];
   loading: boolean;
   onEdit: (item: any) => void;
@@ -34,10 +34,10 @@ const MasterDataTable: React.FC<MasterDataTableProps> = ({
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
         <div className="text-center py-12">
           <div className="text-gray-500 text-lg mb-4">
-            No {dataType === 'office' ? 'offices' : dataType === 'position' ? 'positions' : 'visa types'} found.
+            No {dataType === 'office' ? 'offices' : dataType === 'position' ? 'positions' : dataType === 'visaType' ? 'visa types' : 'platforms'} found.
           </div>
           <p className="text-gray-400">
-            Click the "Add New" button to create your first {dataType === 'office' ? 'office' : dataType === 'position' ? 'position' : 'visa type'}.
+            Click the "Add New" button to create your first {dataType === 'office' ? 'office' : dataType === 'position' ? 'position' : dataType === 'visaType' ? 'visa type' : 'platform'}.
           </p>
         </div>
       </div>
@@ -61,6 +61,11 @@ const MasterDataTable: React.FC<MasterDataTableProps> = ({
         return [
           { key: 'id', label: 'Visa Type ID' },
           { key: 'typeofvisa', label: 'Visa Type' }
+        ];
+      case 'platform':
+        return [
+          { key: 'id', label: 'Platform ID' },
+          { key: 'platform_name', label: 'Platform Name' }
         ];
       default:
         return [];
@@ -92,6 +97,7 @@ const MasterDataTable: React.FC<MasterDataTableProps> = ({
             {data.map((item, index) => {
               const itemId = dataType === 'office' ? item.office_id || item.id : 
                            dataType === 'position' ? item.position_id || item.id : 
+                           dataType === 'platform' ? item.id :
                            item.id;
               return (
                 <tr key={itemId || index} className="hover:bg-gray-50">

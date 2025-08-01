@@ -45,11 +45,13 @@ router.get('/office-position/:officeId/:positionId', requireAuth, employeeContro
 router.get('/count', requireAuth, addUserOffices, employeeController.getEmployeeCount);
 router.get('/salary/total', requireAuth, addUserOffices, employeeController.getTotalMonthlySalary);
 router.get('/summary-by-office', requireAuth, addUserOffices, employeeController.getSummaryByOffice);
+router.get('/summary-by-platform', requireAuth, employeeController.getSummaryByPlatform);
 
-// =================== OFFICE/POSITION OPTIONS ROUTES ================
+// =================== OFFICE/POSITION/PLATFORM OPTIONS ROUTES ================
 router.get('/offices/options', requireAuth, addUserOffices, employeeController.getOfficeOptions);
 router.get('/positions/options', requireAuth, employeeController.getPositionOptions);
 router.get('/positions/by-office/:officeId', requireAuth, employeeController.getPositionsByOffice);
+router.get('/platforms/options', requireAuth, employeeController.getPlatformOptions);
 
 // =================== CRUD (Leave these after static routes) ========
 router.post('/', requireAuth, addUserOffices, employeeController.createEmployee);

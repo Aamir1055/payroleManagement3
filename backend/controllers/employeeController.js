@@ -38,6 +38,13 @@ const getVisaTypeIdByName = async (visa_type_name, db) => {
   if (!visaType || !visaType[0]) throw new Error('Invalid visa_type_name: ' + visa_type_name);
   return visaType[0].id;
 };
+const getPlatformNameById = async (platform_id, db) => {
+  if (!db) throw new Error('Database connection is missing in getPlatformNameById');
+  if (!platform_id) return null; // Allow null platforms
+  const [platform] = await db.query('SELECT platform_name FROM platforms WHERE id = ?', [platform_id]);
+  if (!platform || !platform[0]) throw new Error('Invalid platform_id: ' + platform_id);
+  return platform[0].platform_name;
+};
 
 
 
@@ -111,12 +118,32 @@ module.exports = {
             }
           }
 
+          // Parse platform - convert ID to name (similar to visa type)
+          let platformName = null;
+          if (row['Platform']) {
+            const platformId = Number(row['Platform']);
+            if (isNaN(platformId)) {
+              console.warn(`[IMPORT] Warning: Invalid Platform ID '${row['Platform']}' for employee ${row['Employee ID']}`);
+              platformName = null;
+            } else {
+              // Get platform name from database
+              const [platformResult] = await db.query('SELECT platform_name FROM platforms WHERE id = ?', [platformId]);
+              if (platformResult && platformResult[0]) {
+                platformName = platformResult[0].platform_name;
+              } else {
+                console.warn(`[IMPORT] Warning: No platform found for ID '${platformId}' for employee ${row['Employee ID']}`);
+                platformName = null;
+              }
+            }
+          }
+
           // Log conversions
           console.log(`[IMPORT] Employee ${row['Employee ID']}:
             Joining Date raw='${joiningDateRaw}' parsed='${joiningDate}'
             DOB raw='${dobRaw}' parsed='${dobParsed}'
             Passport Expiry raw='${passportExpiryRaw}' parsed='${passportExpiryParsed}'
             Visa Type raw='${row['Visa Type']}' resolved name='${visaTypeName}'
+            Platform raw='${row['Platform']}' resolved name='${platformName}'
           `);
 
           processed.push([
@@ -132,6 +159,7 @@ module.exports = {
             row['Passport Number'] || null,
             passportExpiryParsed,
             visaTypeName,
+            platformName,
             row['Address'] || null,
             row['Phone'] || null,
             row['Gender'] || null
@@ -142,12 +170,12 @@ module.exports = {
         }
       }
       if (processed.length > 0) {
-        const placeholders = processed.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const placeholders = processed.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
         const flatValues = processed.flat();
         const sql = `
           INSERT INTO employees 
           (employeeId, name, email, office_id, position_id, monthlySalary, joiningDate, status,
-            dob, passport_number, passport_expiry, visa_type, address, phone, gender)
+            dob, passport_number, passport_expiry, visa_type, platform, address, phone, gender)
           VALUES ${placeholders}
           ON DUPLICATE KEY UPDATE
             name = VALUES(name),
@@ -161,6 +189,7 @@ module.exports = {
             passport_number = VALUES(passport_number),
             passport_expiry = VALUES(passport_expiry),
             visa_type = VALUES(visa_type),
+            platform = VALUES(platform),
             address = VALUES(address),
             phone = VALUES(phone),
             gender = VALUES(gender)
@@ -236,6 +265,27 @@ module.exports = {
         if ('Address' in row) fields.push('address = ?'), values.push(row['Address'] || null);
         if ('Phone' in row) fields.push('phone = ?'), values.push(row['Phone'] || null);
         if ('Gender' in row) fields.push('gender = ?'), values.push(row['Gender'] || null);
+        if ('Platform' in row) {
+          let platformName = null;
+          if (row['Platform']) {
+            const platformId = Number(row['Platform']);
+            if (isNaN(platformId)) {
+              console.warn(`[SEC IMPORT] Warning: Invalid Platform ID '${row['Platform']}' for employee ${employeeId}`);
+              platformName = null;
+            } else {
+              // Get platform name from database
+              const [platformResult] = await db.query('SELECT platform_name FROM platforms WHERE id = ?', [platformId]);
+              if (platformResult && platformResult[0]) {
+                platformName = platformResult[0].platform_name;
+              } else {
+                console.warn(`[SEC IMPORT] Warning: No platform found for ID '${platformId}' for employee ${employeeId}`);
+                platformName = null;
+              }
+            }
+          }
+          fields.push('platform = ?');
+          values.push(platformName);
+        }
         if (fields.length === 0) {
           errors.push(`No secondary fields for Employee ID ${employeeId}`);
           continue;
@@ -267,10 +317,11 @@ module.exports = {
   // -- Export Excel employee template with all fields --
   exportEmployeesTemplate: async (req, res) => {
     try {
-      const [[offices], [positions], [visaTypes]] = await Promise.all([
+      const [[offices], [positions], [visaTypes], [platforms]] = await Promise.all([
         req.db.query('SELECT id, name FROM offices'),
         req.db.query('SELECT id, title FROM positions'),
-        req.db.query('SELECT id, typeofvisa FROM visa_types')
+        req.db.query('SELECT id, typeofvisa FROM visa_types'),
+        req.db.query('SELECT id, platform_name FROM platforms')
       ]);
       const template = [{
         'Employee ID': 'EMP001',
@@ -285,6 +336,7 @@ module.exports = {
         'Passport Number': '',
         'Passport Expiry': '',
         'Visa Type': 1,
+        'Platform': 1,
         'Address': '',
         'Phone': '',
         'Gender': ''
@@ -294,6 +346,7 @@ module.exports = {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(offices), 'Offices');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(positions), 'Positions');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(visaTypes), 'VisaTypes');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(platforms), 'Platforms');
       res.setHeader('Content-Disposition', 'attachment; filename=employee_template.xlsx');
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.end(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
@@ -468,10 +521,19 @@ module.exports = {
       res.status(500).json({ error: err.message });
     }
   },
+  getPlatformOptions: async (req, res) => {
+    try {
+      const [results] = await req.db.query('SELECT id, platform_name FROM platforms ORDER BY platform_name');
+      res.json(results);
+    } catch (err) {
+      console.error('Error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  },
   createEmployee: async (req, res) => {
     try {
       const { employeeId, name, email, office_name, position_name, monthlySalary, joiningDate, status,
-        dob, passport_number, passport_expiry, visa_type, address, phone, gender } = req.body;
+        dob, passport_number, passport_expiry, visa_type, platform, address, phone, gender } = req.body;
       if (!employeeId || !office_name || !position_name) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
@@ -493,12 +555,12 @@ module.exports = {
       await db.query(`
         INSERT INTO employees 
         (employeeId, name, email, office_id, position_id, monthlySalary, joiningDate, status,
-          dob, passport_number, passport_expiry, visa_type, address, phone, gender)
+          dob, passport_number, passport_expiry, visa_type, platform, address, phone, gender)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?)
+          ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         employeeId, name, email, office_id, position_id, monthlySalary, joiningDate, statusValue,
-        dob || null, passport_number || null, passport_expiry || null, visa_type || null, address || null, phone || null, gender || null
+        dob || null, passport_number || null, passport_expiry || null, visa_type || null, platform || null, address || null, phone || null, gender || null
       ]);
       const [newEmployee] = await db.query(`
         SELECT e.*, o.name AS office_name, p.title AS position_title,
@@ -546,7 +608,7 @@ module.exports = {
     try {
       const {
         name, email, office_name, position_name, monthlySalary, joiningDate, status,
-        dob, passport_number, passport_expiry, visa_type, address, phone, gender
+        dob, passport_number, passport_expiry, visa_type, platform, address, phone, gender
       } = req.body;
       const db = req.db;
       const office_id = await getOfficeIdByName(office_name, db);
@@ -559,11 +621,11 @@ module.exports = {
         UPDATE employees SET
           name = ?, email = ?, office_id = ?, position_id = ?,
           monthlySalary = ?, joiningDate = ?, status = ?,
-          dob = ?, passport_number = ?, passport_expiry = ?, visa_type = ?, address = ?, phone = ?, gender = ?
+          dob = ?, passport_number = ?, passport_expiry = ?, visa_type = ?, platform = ?, address = ?, phone = ?, gender = ?
         WHERE employeeId = ?
       `, [
         name, email, office_id, position_id, monthlySalary, joiningDate, statusValue,
-        dob || null, passport_number || null, passport_expiry || null, visa_type || null, address || null, phone || null, gender || null,
+        dob || null, passport_number || null, passport_expiry || null, visa_type || null, platform || null, address || null, phone || null, gender || null,
         req.params.employeeId
       ]);
       if (!result.affectedRows) return res.status(404).json({ error: 'Employee not found' });
@@ -593,6 +655,26 @@ module.exports = {
       } else {
         res.status(404).json({ error: 'Employee not found' });
       }
+    } catch (err) {
+      console.error('Error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  },
+
+  getSummaryByPlatform: async (req, res) => {
+    try {
+      const sql = `
+        SELECT p.id AS platform_id, p.platform_name AS platform,
+          COUNT(e.id) AS totalEmployees,
+          SUM(e.monthlySalary) AS totalSalary
+        FROM platforms p
+        LEFT JOIN employees e ON p.platform_name = e.platform AND e.status = 1
+        GROUP BY p.id, p.platform_name
+        ORDER BY p.platform_name
+      `;
+
+      const [results] = await req.db.query(sql);
+      res.json(results);
     } catch (err) {
       console.error('Error:', err);
       res.status(500).json({ error: err.message });

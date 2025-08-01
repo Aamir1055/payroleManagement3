@@ -1,8 +1,8 @@
 import React from 'react';
-import { Building, Briefcase, FileText, TrendingUp } from 'lucide-react';
+import { Building, Briefcase, FileText, TrendingUp, Monitor } from 'lucide-react';
 
 interface MasterDataStatsProps {
-  dataType: 'office' | 'position' | 'visaType';
+  dataType: 'office' | 'position' | 'visaType' | 'platform';
   data: any[];
   loading: boolean;
 }
@@ -67,6 +67,16 @@ const MasterDataStats: React.FC<MasterDataStatsProps> = ({ dataType, data, loadi
             title: 'Total Visa Types',
             value: total,
             icon: FileText,
+            color: 'blue'
+          }
+        ];
+      
+      case 'platform':
+        return [
+          {
+            title: 'Total Platforms',
+            value: total,
+            icon: Monitor,
             color: 'blue'
           }
         ];

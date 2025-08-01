@@ -247,6 +247,14 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  // Helper function to format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
+  };
+
   return (
     <MainLayout 
       title="Dashboard" 
@@ -264,7 +272,7 @@ export const Dashboard: React.FC = () => {
             title="Monthly Payroll"
             value={
               totalMonthlySalary !== null
-                ? `AED ${totalMonthlySalary.toLocaleString()}`
+                ? `AED ${formatCurrency(totalMonthlySalary)}`
                 : '...'
             }
             color="green"
@@ -289,7 +297,7 @@ export const Dashboard: React.FC = () => {
                       Employees: {office.totalEmployees || 0}
                     </div>
                     <div className="text-sm font-semibold text-green-600">
-                      Salary: AED {(office.totalSalary || 0).toLocaleString()}
+                      Salary: AED {formatCurrency(Number(office.totalSalary) || 0)}
                     </div>
                   </>
                 }

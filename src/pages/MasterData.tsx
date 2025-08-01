@@ -1,14 +1,14 @@
 
 import React, { useState } from 'react';
 import { MainLayout } from '../components/Layout/MainLayout';
-import { Building, Briefcase, FileText, Plus, Search, X } from 'lucide-react';
+import { Building, Briefcase, FileText, Plus, Search, X, Monitor } from 'lucide-react';
 import { useMasterData } from '../hooks/useMasterData';
 import MasterDataTable from '../components/Masters/MasterDataTable';
 import MasterDataForm from '../components/Masters/MasterDataForm';
 import MasterDataStats from '../components/Masters/MasterDataStats';
 
 const MasterData = () => {
-  const [activeTab, setActiveTab] = useState<'office' | 'position' | 'visaType'>('office');
+  const [activeTab, setActiveTab] = useState<'office' | 'position' | 'visaType' | 'platform'>('office');
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [viewingItem, setViewingItem] = useState<any>(null);
@@ -58,6 +58,7 @@ const MasterData = () => {
     if (editingItem) {
       const itemId = activeTab === 'office' ? editingItem.office_id || editingItem.id :
                     activeTab === 'position' ? editingItem.position_id || editingItem.id :
+                    activeTab === 'platform' ? editingItem.id :
                     editingItem.id;
       updateItem(itemId, formData);
     } else {
@@ -84,6 +85,10 @@ const MasterData = () => {
           item.typeofvisa?.toLowerCase().includes(searchTermLower) ||
           item.description?.toLowerCase().includes(searchTermLower)
         );
+      case 'platform':
+        return (
+          item.platform_name?.toLowerCase().includes(searchTermLower)
+        );
       default:
         return false;
     }
@@ -98,7 +103,7 @@ const MasterData = () => {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Master Data</h1>
               <p className="mt-2 text-gray-600">
-                Manage your organization's core data: offices, positions, and visa types.
+                Manage your organization's core data: offices, positions, visa types, and platforms.
               </p>
             </div>
             <div className="mt-4 sm:mt-0">
@@ -145,6 +150,16 @@ const MasterData = () => {
               }`}>
               <FileText className="inline-block w-5 h-5 mr-2" />
               Visa Types
+            </button>
+            <button
+              onClick={() => setActiveTab('platform')}
+              className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'platform'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}>
+              <Monitor className="inline-block w-5 h-5 mr-2" />
+              Platforms
             </button>
           </nav>
         </div>

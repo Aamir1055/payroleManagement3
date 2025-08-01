@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 interface MasterDataFormProps {
   isOpen: boolean;
   mode: 'add' | 'edit' | 'view';
-  dataType: 'office' | 'position' | 'visaType';
+  dataType: 'office' | 'position' | 'visaType' | 'platform';
   data: any;
   onSubmit: (data: any) => void;
   onClose: () => void;
@@ -28,7 +28,8 @@ const MasterDataForm: React.FC<MasterDataFormProps> = ({ isOpen, mode, dataType,
   const titles = {
     office: 'Office',
     position: 'Position',
-    visaType: 'Visa Type'
+    visaType: 'Visa Type',
+    platform: 'Platform'
   };
 
   const renderFormFields = () => {
@@ -99,6 +100,20 @@ const MasterDataForm: React.FC<MasterDataFormProps> = ({ isOpen, mode, dataType,
                 rows={3}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               ></textarea>
+            </div>
+          </>
+        );
+      case 'platform':
+        return (
+          <>
+            <div className="mb-4">
+              <label htmlFor="platform_name" className="block text-sm font-medium text-gray-700">Platform Name</label>
+              <input
+                type="text"
+                id="platform_name"
+                {...register('platform_name', { required: true })}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              />
             </div>
           </>
         );
