@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Employee } from '../types';
-import { useToast } from '../components/UI/ToastContainer';
 
 // Helper to safely extract a string from possible object/string
-const getDisplayName = (item: any, nameKey: string = 'name', fallbackKey?: string): string => {
-  if (typeof item === 'object' && item?.[nameKey]) return item[nameKey];
-  if (typeof item === 'object' && fallbackKey && item?.[fallbackKey]) return item[fallbackKey];
-  return String(item);
+interface DisplayItem {
+  [key: string]: unknown;
+}
+
+const getDisplayName = (item: DisplayItem | string | null | undefined, nameKey: string = 'name', fallbackKey?: string): string => {
+  if (typeof item === 'object' && item && nameKey in item && item[nameKey]) return String(item[nameKey]);
+  if (typeof item === 'object' && item && fallbackKey && fallbackKey in item && item[fallbackKey]) return String(item[fallbackKey]);
+  return String(item || '');
 };
 
 export const useEmployees = () => {
@@ -39,7 +42,14 @@ export const useEmployees = () => {
       const data = await response.json();
 
       // Deep normalization: convert any object office_name or position_name to string
-      const processedData = data.map((emp: any) => ({
+      interface RawEmployee extends Omit<Employee, 'office_name' | 'position_name' | 'status'> {
+        office_name: DisplayItem | string;
+        position_name: DisplayItem | string;
+        position_title?: string;
+        status: boolean | number | string;
+      }
+      
+      const processedData = data.map((emp: RawEmployee) => ({
         ...emp,
         office_name: getDisplayName(emp.office_name, 'name', 'office_name') || 'Not assigned',
         position_name: getDisplayName(emp.position_name, 'title', 'position_name') || emp.position_title || 'Not assigned',
@@ -142,22 +152,22 @@ export const useEmployees = () => {
 
 
 const fetchEmployeeById = async (employeeId: string): Promise<Employee | null> => {
-  try {
-    const response = await fetch(`/api/employees/${employeeId}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    // Normalize like your main fetch:
-    return {
-      ...data,
-      office_name: data.office_name ?? '',
-      position_name: data.position_name ?? data.position_title ?? '',
-      status: data.status === 1 || data.status === true || data.status === 'active'
-    } as Employee;
-  } catch (err) {
-    return null;
-  }
+  try {
+    const response = await fetch(`/api/employees/${employeeId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    // Normalize like your main fetch:
+    return {
+      ...data,
+      office_name: data.office_name ?? '',
+      position_name: data.position_name ?? data.position_title ?? '',
+      status: data.status === 1 || data.status === true || data.status === 'active'
+    } as Employee;
+  } catch {
+    return null;
+  }
 };
 
 

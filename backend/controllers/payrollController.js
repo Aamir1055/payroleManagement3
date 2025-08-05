@@ -5,6 +5,35 @@ const db = require('../db');
 const moment = require('moment');
 const axios = require('axios');
 
+// Configure moment to use consistent timezone handling
+moment.suppressDeprecationWarnings = true;
+
+// Utility function for consistent date formatting
+const formatDateForDB = (date) => {
+  if (!date) return null;
+  return moment(date).format('YYYY-MM-DD');
+};
+
+// Utility function for safe database transactions
+const executeTransaction = async (operations) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    const results = [];
+    for (const operation of operations) {
+      const result = await connection.query(operation.sql, operation.params);
+      results.push(result);
+    }
+    await connection.commit();
+    return results;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 /* ------------------------------------------------------------------
    Fetch working-days for a month as COUNT or as ARRAY (dates)
 ------------------------------------------------------------------ */
@@ -23,19 +52,36 @@ const fetchWorkingDaysCount = async (year, month) => {
 
 const fetchWorkingDaysArray = async (year, month) => {
   try {
+    // Input validation
+    const yearNum = parseInt(year, 10);
+    const monthNum = parseInt(month, 10);
+    if (isNaN(yearNum) || isNaN(monthNum) || yearNum < 2000 || yearNum > 2100 || monthNum < 1 || monthNum > 12) {
+      throw new Error(`Invalid year (${year}) or month (${month})`);
+    }
+
     const { data } = await axios.get(
       `http://localhost:${process.env.PORT || 5000}/api/holidays/working-days`,
-      { params: { year, month } }
+      { params: { year: yearNum, month: monthNum }, timeout: 5000 }
     );
+    
     if (Array.isArray(data.days)) return data.days;
+    
+    // Generate fallback working days (exclude Sundays)
     const fallback = [];
-    for (let d = 1; d <= (data.workingDays || 26); d++) {
-      fallback.push(moment.utc(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`).format('YYYY-MM-DD'));
+    const daysInMonth = moment({ year: yearNum, month: monthNum - 1 }).daysInMonth();
+    
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = moment({ year: yearNum, month: monthNum - 1, day: d });
+      // Skip Sundays (day 0)
+      if (date.day() !== 0) {
+        fallback.push(date.format('YYYY-MM-DD'));
+      }
     }
     return fallback;
   } catch (e) {
     console.error('Could not fetch working-days', e.message);
-    return [];
+    // Return empty array to prevent processing with invalid data
+    throw new Error(`Holiday service unavailable: ${e.message}`);
   }
 };
 
@@ -65,65 +111,76 @@ const getEmployeeTimingConfig = async (employee) => {
 const calculateAttendanceMetrics = async (employee, attRecords, workingDays) => {
   const { duty_hours, reporting_time } = await getEmployeeTimingConfig(employee);
   const dutyMinutes = Math.round(Number(duty_hours) * 60);
-  const repMoment = moment(reporting_time, 'HH:mm:ss');
+  const repMoment = moment(reporting_time, ['HH:mm:ss', 'HH:mm']);
 
   let presentDays = 0, halfDays = 0, lateDays = 0;
   let dayStatus = [];
-  let lateDateIndexes = [];
+  let lateRecords = []; // Track late records separately to avoid index issues
 
+  // Sort records by date for consistent processing
   const sortedRecords = attRecords.slice().sort((a, b) => moment(a.date).diff(moment(b.date)));
 
+  // Process each attendance record
   for (const rec of sortedRecords) {
-    const punchInStr = rec.punch_in;
-    const punchOutStr = rec.punch_out;
-    const punchIn = moment(punchInStr, 'HH:mm:ss');
-    const punchOut = moment(punchOutStr, 'HH:mm:ss');
-    let worked = punchOut.diff(punchIn, 'minutes');
-    const lateMins = punchIn.diff(repMoment, 'minutes');
-
+    const punchInStr = rec.punch_in?.toString().trim();
+    const punchOutStr = rec.punch_out?.toString().trim();
+    
+    // Validate punch times with multiple formats
+    const punchIn = moment(punchInStr, ['HH:mm:ss', 'HH:mm'], true);
+    const punchOut = moment(punchOutStr, ['HH:mm:ss', 'HH:mm'], true);
+    
+    // Check for invalid or missing punch data
     if (
       !punchInStr || !punchOutStr ||
       punchInStr === "00:00" || punchOutStr === "00:00" ||
-      isNaN(worked) || worked <= 0
+      punchInStr === "00:00:00" || punchOutStr === "00:00:00" ||
+      !punchIn.isValid() || !punchOut.isValid()
     ) {
-      dayStatus.push({ date: rec.date, status: 'A' });
+      dayStatus.push({ date: formatDateForDB(rec.date), status: 'A' });
+      continue;
+    }
+
+    const worked = punchOut.diff(punchIn, 'minutes');
+    const lateMins = punchIn.diff(repMoment, 'minutes');
+    
+    // Validate worked time
+    if (isNaN(worked) || worked <= 0 || worked > 24 * 60) {
+      dayStatus.push({ date: formatDateForDB(rec.date), status: 'A' });
       continue;
     }
 
     // Employee is present if they have valid punch in/out
     presentDays++;
+    const isLate = lateMins >= 1;
+    const isFullDay = worked >= dutyMinutes;
     
-    // Check if worked full hours
-    if (worked >= dutyMinutes) {
-      // Full day worked
-      if (lateMins >= 1) {
-        // Present but late
-        lateDays++;
-        lateDateIndexes.push(dayStatus.length);
-        dayStatus.push({ date: rec.date, status: 'PL' }); // Present + Late
-      } else {
-        // Present and on time
-        dayStatus.push({ date: rec.date, status: 'P' });
-      }
-    } else {
-      // Half day worked
-      halfDays++;
-      if (lateMins >= 1) {
-        // Half day and late
-        lateDays++;
-        dayStatus.push({ date: rec.date, status: 'HDL' }); // Half Day + Late
-      } else {
-        // Half day but on time
-        dayStatus.push({ date: rec.date, status: 'HD' });
-      }
+    if (isLate) {
+      lateDays++;
+      lateRecords.push({
+        date: formatDateForDB(rec.date),
+        index: dayStatus.length,
+        isFullDay
+      });
     }
+    
+    // Determine status based on work hours and punctuality
+    let status;
+    if (isFullDay) {
+      status = isLate ? 'PL' : 'P'; // Present Late or Present
+    } else {
+      halfDays++;
+      status = isLate ? 'HDL' : 'HD'; // Half Day Late or Half Day
+    }
+    
+    dayStatus.push({ date: formatDateForDB(rec.date), status });
   }
 
   // Handle excess late days (convert to half days after 3rd occurrence)
-  for (let i = 3; i < lateDateIndexes.length; i++) {
-    const dayIndex = lateDateIndexes[i];
-    if (dayStatus[dayIndex].status === 'PL') {
-      dayStatus[dayIndex].status = 'HDL';
+  // Process in reverse order to avoid index shifting issues
+  const excessLateRecords = lateRecords.slice(3); // After 3rd late occurrence
+  for (const lateRecord of excessLateRecords.reverse()) {
+    if (dayStatus[lateRecord.index].status === 'PL') {
+      dayStatus[lateRecord.index].status = 'HDL';
       presentDays--;
       halfDays++;
     }
@@ -176,10 +233,22 @@ const calculateAttendanceMetrics = async (employee, attRecords, workingDays) => 
 const calculateSalaryAndDeductions = (employee, metrics, workingDays) => {
   const baseSalary = parseFloat(employee.monthlySalary || 0);
   const perDaySalary = workingDays ? (baseSalary / workingDays) : 0;
+  
+  // Calculate deductions only if there are actual issues
   let totalDeductions = 0;
-  totalDeductions += metrics.absentDays * perDaySalary;
-  totalDeductions += metrics.halfDays * (perDaySalary / 2);
-  totalDeductions += metrics.excessLeaves * 2 * perDaySalary;
+  
+  // Only apply deductions if there are absent days, half days, or excess leaves
+  if (metrics.absentDays > 0) {
+    totalDeductions += metrics.absentDays * perDaySalary;
+  }
+  
+  if (metrics.halfDays > 0) {
+    totalDeductions += metrics.halfDays * (perDaySalary / 2);
+  }
+  
+  if (metrics.excessLeaves > 0) {
+    totalDeductions += metrics.excessLeaves * 2 * perDaySalary;
+  }
   
   // Cap deductions to not exceed base salary
   const cappedDeductions = Math.min(totalDeductions, baseSalary);
@@ -220,15 +289,48 @@ const savePayroll = async (p) => {
 ------------------------------------------------------------------ */
 const getPayrollReports = async (req, res) => {
   console.log("==> getPayrollReports CALLED");
+  const connection = await db.getConnection();
+  
   try {
     const { fromDate, toDate, office, position, page = 1, pageSize = 10 } = req.query;
-    if (!fromDate || !toDate)
+    
+    // Input validation
+    if (!fromDate || !toDate) {
       return res.status(400).json({ error: 'From date and to date are required' });
+    }
+    
+    const fromMoment = moment(fromDate);
+    const toMoment = moment(toDate);
+    
+    if (!fromMoment.isValid() || !toMoment.isValid()) {
+      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+    }
+    
+    if (toMoment.isBefore(fromMoment)) {
+      return res.status(400).json({ error: 'To date must be after from date' });
+    }
+    
+    // Check if date range spans multiple months
+    if (fromMoment.month() !== toMoment.month() || fromMoment.year() !== toMoment.year()) {
+      return res.status(400).json({ error: 'Date range must be within the same month' });
+    }
 
-    const year = moment(fromDate).year();
-    const month = moment(fromDate).month() + 1;
-    const workingDays = await fetchWorkingDaysCount(year, month);
-    const workingDaysArray = await fetchWorkingDaysArray(year, month);
+    const year = fromMoment.year();
+    const month = fromMoment.month() + 1;
+    
+    let workingDays, workingDaysArray;
+    try {
+      [workingDays, workingDaysArray] = await Promise.all([
+        fetchWorkingDaysCount(year, month),
+        fetchWorkingDaysArray(year, month)
+      ]);
+    } catch (holidayError) {
+      console.error('Holiday service error:', holidayError.message);
+      return res.status(503).json({ 
+        error: 'Holiday service is currently unavailable. Please try again later.',
+        details: holidayError.message 
+      });
+    }
 
     // Get office filter for user access control
     const { buildOfficeFilter } = require('../middleware/auth');
@@ -283,53 +385,79 @@ const getPayrollReports = async (req, res) => {
       attByEmp[r.employee_id].push(r);
     });
 
+    // Process employees in chunks to prevent memory issues
+    const CHUNK_SIZE = 50;
     let payrollData = [], totalNetSalary = 0, totalDeductions = 0;
-    for (const employee of employees) {
-      const id = employee.employeeId;
-      const empAtt = attByEmp[id] || [];
-      const attendedDates = new Set(empAtt.map(att => moment(att.date).format('YYYY-MM-DD')));
-      const missingDays = workingDaysArray.filter(date => !attendedDates.has(date)).length;
+    
+    for (let i = 0; i < employees.length; i += CHUNK_SIZE) {
+      const chunk = employees.slice(i, i + CHUNK_SIZE);
+      const chunkPromises = chunk.map(async (employee) => {
+        const id = employee.employeeId;
+        const empAtt = attByEmp[id] || [];
+        
+        // Get dates that have attendance records
+        const attendedDates = new Set(
+          empAtt.map(att => formatDateForDB(att.date))
+        );
+        
+        // Calculate missing days (working days without attendance records)
+        const missingDays = workingDaysArray.filter(date => !attendedDates.has(date)).length;
 
-      const metrics = await calculateAttendanceMetrics(employee, empAtt, workingDays);
-      const totalAbsentDays = metrics.absentDays + missingDays;
-      const metricsForSalary = {
-        ...metrics,
-        absentDays: totalAbsentDays,
-        excessLeaves: metrics.excessLeaves
-      };
-      const salaryData = calculateSalaryAndDeductions(employee, metricsForSalary, workingDays);
+        const metrics = await calculateAttendanceMetrics(employee, empAtt, workingDays);
+        
+        // Fix: Don't double-count missing days that are already marked as absent
+        // Missing days are truly absent (no record), metrics.absentDays are days with invalid punch data
+        const totalAbsentDays = metrics.absentDays + missingDays;
+        
+        const metricsForSalary = {
+          ...metrics,
+          absentDays: totalAbsentDays,
+          excessLeaves: metrics.excessLeaves
+        };
+        
+        const salaryData = calculateSalaryAndDeductions(employee, metricsForSalary, workingDays);
 
-      await savePayroll({
-        employeeId: id,
-        present_days: metrics.presentDays,
-        half_days: metrics.halfDays,
-        late_days: metrics.lateDays,
-        leaves: metrics.absentDays,
-        excess_leaves: metrics.excessLeaves,
-        deductions_amount: salaryData.totalDeductions,
-        net_salary: salaryData.netSalary,
-        month,
-        year
+        // Save payroll data
+        await savePayroll({
+          employeeId: id,
+          present_days: metrics.presentDays,
+          half_days: metrics.halfDays,
+          late_days: metrics.lateDays,
+          leaves: totalAbsentDays, // Use total absent days including missing
+          excess_leaves: metrics.excessLeaves,
+          deductions_amount: salaryData.totalDeductions,
+          net_salary: salaryData.netSalary,
+          month,
+          year
+        });
+
+        return {
+          employeeId: id,
+          name: employee.name,
+          email: employee.email,
+          officeName: employee.officeName,
+          positionTitle: employee.positionTitle,
+          presentDays: metrics.presentDays,
+          lateDays: metrics.lateDays,
+          halfDays: metrics.halfDays,
+          absentDays: totalAbsentDays, // Use total absent days
+          missingDays: missingDays, // Show missing days separately
+          excessLeaves: metrics.excessLeaves,
+          baseSalary: salaryData.baseSalary,
+          perDaySalary: salaryData.perDaySalary,
+          totalDeductions: salaryData.totalDeductions,
+          netSalary: salaryData.netSalary
+        };
       });
-
-      payrollData.push({
-        employeeId: id,
-        name: employee.name,
-        email: employee.email,
-        officeName: employee.officeName,
-        positionTitle: employee.positionTitle,
-        presentDays: metrics.presentDays,
-        lateDays: metrics.lateDays,
-        halfDays: metrics.halfDays,
-        absentDays: metrics.absentDays,
-        excessLeaves: metrics.excessLeaves,
-        baseSalary: salaryData.baseSalary,
-        perDaySalary: salaryData.perDaySalary,
-        totalDeductions: salaryData.totalDeductions,
-        netSalary: salaryData.netSalary
+      
+      const chunkResults = await Promise.all(chunkPromises);
+      payrollData.push(...chunkResults);
+      
+      // Update totals
+      chunkResults.forEach(result => {
+        totalNetSalary += result.netSalary;
+        totalDeductions += result.totalDeductions;
       });
-      totalNetSalary += salaryData.netSalary;
-      totalDeductions += salaryData.totalDeductions;
     }
 
     res.json({
@@ -346,7 +474,13 @@ const getPayrollReports = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in getPayrollReports:', error);
-    res.status(500).json({ error: 'Failed to fetch payroll reports', details: error.message });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch payroll reports', 
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  } finally {
+    if (connection) connection.release();
   }
 };
 

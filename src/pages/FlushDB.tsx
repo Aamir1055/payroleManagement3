@@ -9,7 +9,7 @@ interface FlushDBProps {}
 
 interface ApiResponse {
   message: string;
-  clearedTables?: string[];
+   clearedTables?: string[];
 }
 
 const FlushDB: React.FC<FlushDBProps> = () => {

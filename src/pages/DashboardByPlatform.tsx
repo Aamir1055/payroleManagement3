@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { MainLayout } from '../components/Layout/MainLayout';
 import { MetricCard } from '../components/Dashboard/MetricCard';
+import { DashboardPlatformCharts } from '../components/Dashboard/DashboardPlatformCharts';
+import { DirhamIcon } from '../components/Icons/DirhamIcon';
+import { User, Building, Layers } from 'lucide-react';
 
 interface PlatformData {
   platform_id: number;
@@ -74,22 +77,29 @@ export const DashboardByPlatform: React.FC = () => {
       subtitle="Overview of employees grouped by platform"
     >
       <div className="space-y-6">
-        {/* Summary Cards */}
+        {/* Real-time Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <MetricCard
+            title="Total Employees"
+            value={totalEmployees !== null ? totalEmployees.toString() : '...'}
+            color="blue"
+            icon={User}
+          />
+          <MetricCard
+            title="Monthly Payroll"
+            value={
+              totalSalary !== null
+                ? `AED ${formatCurrency(totalSalary)}`
+                : '...'
+            }
+            color="green"
+            icon={DirhamIcon as any}
+          />
           <MetricCard
             title="Total Platforms"
             value={totalPlatforms.toString()}
             color="purple"
-          />
-          <MetricCard
-            title="Total Employees"
-            value={totalEmployees.toString()}
-            color="blue"
-          />
-          <MetricCard
-            title="Monthly Payroll"
-            value={`AED ${formatCurrency(totalSalary)}`}
-            color="green"
+            icon={Layers}
           />
         </div>
 
@@ -111,6 +121,7 @@ export const DashboardByPlatform: React.FC = () => {
                   </>
                 }
                 color="purple"
+                icon={Layers}
               />
             ))}
           </div>
@@ -119,6 +130,13 @@ export const DashboardByPlatform: React.FC = () => {
             <p className="text-gray-500">No platform data available. Add platforms to see summaries here.</p>
           </div>
         )}
+
+        {/* Dashboard Platform Charts */}
+        <DashboardPlatformCharts 
+          platformData={platformData}
+          totalEmployees={totalEmployees || 0}
+          totalMonthlySalary={totalSalary || 0}
+        />
       </div>
     </MainLayout>
   );

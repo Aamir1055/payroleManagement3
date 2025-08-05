@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { MainLayout } from '../components/Layout/MainLayout';
 import { MetricCard } from '../components/Dashboard/MetricCard';
+import { DashboardCharts } from '../components/Dashboard/DashboardCharts';
+import { DirhamIcon } from '../components/Icons/DirhamIcon';
+import { User, Building } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
   // State variables
@@ -247,11 +250,11 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // Helper function to format currency
+  // Helper function to format currency in Dirhams
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+    return new Intl.NumberFormat('ar-AE', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
@@ -263,10 +266,11 @@ export const Dashboard: React.FC = () => {
       <div className="space-y-6">
         {/* Real-time Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <MetricCard
+<MetricCard
             title="Total Employees"
             value={totalEmployees !== null ? totalEmployees.toString() : '...'}
             color="blue"
+            icon={User}
           />
           <MetricCard
             title="Monthly Payroll"
@@ -276,11 +280,13 @@ export const Dashboard: React.FC = () => {
                 : '...'
             }
             color="green"
+            icon={DirhamIcon as any}
           />
           <MetricCard
             title="Total Offices"
             value={officeSummary.length.toString()}
             color="purple"
+            icon={Building}
           />
         </div>
 
@@ -302,6 +308,7 @@ export const Dashboard: React.FC = () => {
                   </>
                 }
                 color="purple"
+                icon={Building}
               />
             ))}
           </div>
@@ -311,6 +318,12 @@ export const Dashboard: React.FC = () => {
           </div>
         )}
 
+        {/* Dashboard Charts */}
+        <DashboardCharts 
+          officeSummary={officeSummary}
+          totalEmployees={totalEmployees || 0}
+          totalMonthlySalary={totalMonthlySalary || 0}
+        />
 
       </div>
     </MainLayout>

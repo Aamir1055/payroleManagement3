@@ -26,12 +26,19 @@ export interface User {
   }>;
 }
 
+// Error interface for better type safety
+interface ApiError {
+  error: string;
+  details: string;
+}
+
 export const RoleManagement: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | undefined>();
   const [viewingUser, setViewingUser] = useState<User | undefined>();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
+  const [formErrors, setFormErrors] = useState<string[]>([]);
 
   const {
     users,
@@ -43,25 +50,79 @@ export const RoleManagement: React.FC = () => {
     deleteUser
   } = useUsers();
 
-  // Handle form submission
+  // Enhanced error message parser
+  const parseErrorMessage = (error: any): string => {
+    console.log('Error object:', error); // Debug log
+    
+    // Check if it's an API error response
+    if (error?.response?.data) {
+      const errorData = error.response.data as ApiError;
+      
+      // Use detailed message if available, otherwise use main error
+      if (errorData.details) {
+        return errorData.details;
+      } else if (errorData.error) {
+        return errorData.error;
+      }
+    }
+    
+    // Check if it's a direct error object
+    if (error?.details) {
+      return error.details;
+    } else if (error?.error) {
+      return error.error;
+    }
+    
+    // Check for message property
+    if (error?.message) {
+      return error.message;
+    }
+    
+    // Fallback to string representation
+    if (typeof error === 'string') {
+      return error;
+    }
+    
+    // Default fallback
+    return 'An unexpected error occurred. Please try again.';
+  };
+
+  // Enhanced form submission handler
   const handleSubmit = async (userData: any) => {
     try {
+      // Clear previous errors
+      setFormErrors([]);
+      
+      let result;
       if (editingUser) {
-        await updateUser(editingUser.id, userData);
+        result = await updateUser(editingUser.id, userData);
         toast.success('User updated successfully');
       } else {
-        await createUser(userData);
+        result = await createUser(userData);
         toast.success('User created successfully');
       }
+      
       handleCloseForm();
       await refreshUsers();
+      
     } catch (error) {
       console.error('Error saving user:', error);
-      toast.error(editingUser ? 'Failed to update user' : 'Failed to create user');
+      
+      const errorMessage = parseErrorMessage(error);
+      
+      // Set form-specific errors for display in the form
+      setFormErrors([errorMessage]);
+      
+      // Show toast with specific error message
+      toast.error(errorMessage, {
+        autoClose: 5000, // Keep error visible longer
+        closeOnClick: true,
+        pauseOnHover: true,
+      });
     }
   };
 
-  // Handle user deletion
+  // Enhanced delete handler
   const handleDelete = async (id: number) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
@@ -70,7 +131,13 @@ export const RoleManagement: React.FC = () => {
         await refreshUsers();
       } catch (error) {
         console.error('Error deleting user:', error);
-        toast.error('Failed to delete user');
+        
+        const errorMessage = parseErrorMessage(error);
+        toast.error(errorMessage, {
+          autoClose: 5000,
+          closeOnClick: true,
+          pauseOnHover: true,
+        });
       }
     }
   };
@@ -80,10 +147,12 @@ export const RoleManagement: React.FC = () => {
     setShowForm(false);
     setEditingUser(undefined);
     setViewingUser(undefined);
+    setFormErrors([]); // Clear errors when closing form
   };
 
   // Handle edit
   const handleEdit = (user: User) => {
+    setFormErrors([]); // Clear previous errors
     setEditingUser(user);
     setViewingUser(undefined);
     setShowForm(true);
@@ -91,6 +160,7 @@ export const RoleManagement: React.FC = () => {
 
   // Handle view
   const handleView = (user: User) => {
+    setFormErrors([]); // Clear previous errors
     setViewingUser(user);
     setEditingUser(undefined);
     setShowForm(true);
@@ -100,6 +170,7 @@ export const RoleManagement: React.FC = () => {
   const handleAddNew = () => {
     console.log('handleAddNew clicked - before state changes');
     console.log('Current showForm state:', showForm);
+    setFormErrors([]); // Clear previous errors
     setEditingUser(undefined);
     setViewingUser(undefined);
     setShowForm(true);
@@ -259,6 +330,7 @@ export const RoleManagement: React.FC = () => {
               onSubmit={handleSubmit}
               onClose={handleCloseForm}
               viewOnly={!!viewingUser}
+              errors={formErrors} // Pass errors to form
             />
           </div>
         )}

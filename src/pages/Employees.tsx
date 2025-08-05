@@ -1,5 +1,5 @@
 import { Employee } from '../types';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MainLayout } from '../components/Layout/MainLayout';
 import { EmployeeTable } from '../components/Employees/EmployeeTable';
 import { useEmployees } from '../hooks/useEmployees';
@@ -32,11 +32,46 @@ export const Employees: React.FC = () => {
   } = useEmployees();
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedOffice, setSelectedOffice] = useState('');
+  const [selectedPosition, setSelectedPosition] = useState('');
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [offices, setOffices] = useState<any[]>([]);
+  const [positions, setPositions] = useState<any[]>([]);
 
   const navigate = useNavigate();
   const { showSuccess, showError } = useToast();
+
+  // Fetch offices and positions for filters
+  useEffect(() => {
+    const fetchFilterData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const headers = {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        };
+
+        // Fetch offices
+        const officesResponse = await fetch('/api/masters/offices', { headers });
+        if (officesResponse.ok) {
+          const officesData = await officesResponse.json();
+          setOffices(officesData);
+        }
+
+        // Fetch positions
+        const positionsResponse = await fetch('/api/masters/positions', { headers });
+        if (positionsResponse.ok) {
+          const positionsData = await positionsResponse.json();
+          setPositions(positionsData);
+        }
+      } catch (error) {
+        console.error('Error fetching filter data:', error);
+      }
+    };
+
+    fetchFilterData();
+  }, []);
 
   const normalizedEmployees = employees.map((emp) => ({
     ...emp,
@@ -44,6 +79,7 @@ export const Employees: React.FC = () => {
   }));
 
   const filteredEmployees = normalizedEmployees.filter((employee) => {
+    // Search filter
     const search = searchTerm.trim().toLowerCase();
     const fieldsToSearch = [
       employee.name || '',
@@ -53,7 +89,17 @@ export const Employees: React.FC = () => {
       String(employee.monthlySalary || ''),
       employee.status ? 'Active' : 'Inactive',
     ].map((f) => String(f).trim().toLowerCase());
-    return fieldsToSearch.some((field) => field.includes(search));
+    const searchMatch = !search || fieldsToSearch.some((field) => field.includes(search));
+
+    // Office filter
+    const officeMatch = !selectedOffice || 
+      getDisplayName(employee.office_name, 'name', 'office_name') === selectedOffice;
+
+    // Position filter
+    const positionMatch = !selectedPosition || 
+      (employee.position_title === selectedPosition || employee.position_name === selectedPosition);
+
+    return searchMatch && officeMatch && positionMatch;
   });
 
   const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
@@ -294,17 +340,57 @@ export const Employees: React.FC = () => {
       <div className="space-y-6 pt-14">
         {/* TOP BAR: Search and other buttons (excluding Sample Excel & Export) */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          {/* Search bar */}
-          <input
-            type="text"
-            placeholder="Search by name, ID, office, email, salary, or status..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="flex-1 min-w-[160px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full md:w-[280px] max-w-[320px]"
-          />
+          {/* Search and Filters */}
+          <div className="flex flex-col sm:flex-row gap-3 flex-1">
+            {/* Search bar */}
+            <input
+              type="text"
+              placeholder="Search by name, ID, office, email, salary, or status..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="flex-1 min-w-[160px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            
+            {/* Office Filter */}
+            <select
+              value={selectedOffice}
+              onChange={(e) => {
+                setSelectedOffice(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[140px]"
+            >
+              <option value="">All Offices</option>
+              {offices.map((office) => (
+                <option key={office.id || office.name} value={getDisplayName(office, 'name', 'office_name')}>
+                  {getDisplayName(office, 'name', 'office_name')}
+                </option>
+              ))}
+            </select>
+            
+            {/* Position Filter */}
+            <select
+              value={selectedPosition}
+              onChange={(e) => {
+                setSelectedPosition(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[140px]"
+            >
+              <option value="">All Positions</option>
+              {Array.from(new Set(positions.map(position => getDisplayName(position, 'title', 'position_name'))))
+                .filter(positionName => positionName.trim() !== '')
+                .sort()
+                .map((positionName, index) => (
+                  <option key={`position-${index}`} value={positionName}>
+                    {positionName}
+                  </option>
+                ))}
+            </select>
+          </div>
 
           {/* Other buttons */}
           <div className="flex flex-wrap gap-2 justify-start md:justify-end items-center w-full md:w-auto">

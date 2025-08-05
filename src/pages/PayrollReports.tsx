@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { MainLayout } from '../components/Layout/MainLayout';
-import axios from '../api/axios';
-import moment from 'moment';
-import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
+import { useNavigate } from "react-router-dom";
+import { MainLayout } from "../components/Layout/MainLayout";
+import axios from "../api/axios";
+import moment from "moment";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
 interface PayrollEntry {
   employeeId: string;
@@ -56,9 +56,12 @@ const PayrollReports: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [noData, setNoData] = useState(false);
-  // NEW STATE: For delete operations
   const [deleteLoading, setDeleteLoading] = useState(false);
   const isInitial = useRef(true);
+
+  // Sorting state
+  const [sortField, setSortField] = useState<keyof PayrollEntry | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const pageSizes = [10, 30, 50, 70, 100, 150, 200, 300, 400, 500];
   const [page, setPage] = useState(1);
@@ -119,7 +122,6 @@ const PayrollReports: React.FC = () => {
     }
   };
 
-  // NEW FUNCTION: Delete all attendance data for selected month
   const deleteMonthAttendance = async () => {
     const [year, month] = selectedMonth.split('-');
     const monthName = moment(selectedMonth).format('MMMM YYYY');
@@ -144,13 +146,10 @@ const PayrollReports: React.FC = () => {
           });
           
           if (response.data.success) {
-            // Clear current data
             setPayrollData([]);
             setSummary(null);
             setCalendarDays([]);
             setNoData(true);
-            
-            // Show success message
             alert(`✅ Successfully deleted all attendance data for ${monthName}\n\nDeleted ${response.data.deletedRecords} attendance records.`);
           } else {
             setError(response.data.error || 'Failed to delete attendance data');
@@ -185,6 +184,65 @@ const PayrollReports: React.FC = () => {
     navigate(`/employee/${employee.employeeId}?${qs}`);
   };
 
+  // Column sorting handler
+  const handleSort = (field: keyof PayrollEntry) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Sort the payroll data
+  const sortedPayrollData = React.useMemo(() => {
+    if (!sortField) return payrollData;
+    
+    return [...payrollData].sort((a, b) => {
+      const aValue = a[sortField];
+      const bValue = b[sortField];
+      
+      // Handle string comparisons
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        const comparison = aValue.localeCompare(bValue);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }
+      
+      // Handle number comparisons
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        const comparison = aValue - bValue;
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }
+      
+      return 0;
+    });
+  }, [payrollData, sortField, sortDirection]);
+
+  // Render sort icon
+  const renderSortIcon = (field: keyof PayrollEntry) => {
+    if (sortField !== field) {
+      return (
+        <svg className="w-4 h-4 ml-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+        </svg>
+      );
+    }
+    
+    if (sortDirection === 'asc') {
+      return (
+        <svg className="w-4 h-4 ml-1 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+        </svg>
+      );
+    } else {
+      return (
+        <svg className="w-4 h-4 ml-1 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      );
+    }
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('fromDate')) {
@@ -217,18 +275,15 @@ const PayrollReports: React.FC = () => {
       return;
     }
     fetchPayrollReports();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize]);
 
   return (
     <MainLayout title="Payroll Reports" subtitle="View and manage employee payroll reports">
       <div className="space-y-8">
 
-        {/* FILTERS */}
         <div className="bg-white ring-1 ring-blue-100 rounded-2xl shadow-sm px-6 py-5 mb-2">
           <div className="flex items-center gap-3 mb-4">
             <div className="bg-blue-600 rounded-full p-2">
-              {/* Filter icon */}
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
               </svg>
@@ -237,7 +292,6 @@ const PayrollReports: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Month */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Select Month
@@ -254,7 +308,6 @@ const PayrollReports: React.FC = () => {
                 className="w-full border border-gray-200 rounded-md px-3 py-2 bg-blue-50 focus:ring-blue-400 focus:border-blue-500 shadow-sm"
               />
             </div>
-            {/* Office */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Office</label>
               <select
@@ -268,7 +321,6 @@ const PayrollReports: React.FC = () => {
                 ))}
               </select>
             </div>
-            {/* Position */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Position</label>
               <select
@@ -282,7 +334,6 @@ const PayrollReports: React.FC = () => {
                 ))}
               </select>
             </div>
-            {/* Generate & Export */}
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => {
@@ -324,8 +375,6 @@ const PayrollReports: React.FC = () => {
               </button>
             </div>
           </div>
-
-          {/* NEW: DANGER ZONE - Delete Month Data */}
           {(payrollData.length > 0 || calendarDays.length > 0) && (
             <div className="mt-8 pt-6 border-t border-gray-200">
               <div className="bg-gradient-to-r from-red-50 to-rose-50 border-2 border-red-200 rounded-xl p-6">
@@ -342,7 +391,6 @@ const PayrollReports: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                
                 <button
                   onClick={deleteMonthAttendance}
                   disabled={deleteLoading || loading}
@@ -369,28 +417,24 @@ const PayrollReports: React.FC = () => {
             </div>
           )}
         </div>
-
-        {/* INFO/STATUS */}
         {loading && (
           <div className="p-4 rounded-md bg-blue-50 border border-blue-100 text-blue-800 flex items-center gap-2">
             <svg className="animate-spin h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
             Loading payroll reports...
           </div>
         )}
-
         {deleteLoading && (
           <div className="p-4 rounded-md bg-red-50 border border-red-200 text-red-800 flex items-center gap-2">
             <svg className="animate-spin h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
             🗑️ Deleting attendance data for {moment(selectedMonth).format('MMMM YYYY')}...
           </div>
         )}
-
         {error && (
           <div className="p-4 rounded-md bg-red-50 border border-red-200 text-red-700 flex items-center gap-2">
             <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -399,7 +443,6 @@ const PayrollReports: React.FC = () => {
             <span>{error}</span>
           </div>
         )}
-
         {noData && (
           <div className="p-4 rounded-md bg-amber-50 border border-amber-200 text-amber-700 flex items-center gap-2">
             <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
@@ -408,19 +451,14 @@ const PayrollReports: React.FC = () => {
             No attendance uploaded for {selectedMonth}
           </div>
         )}
-
-        {/* Rest of your existing code remains the same... */}
-        {/* SUMMARY CARDS */}
         {summary && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Total Monthly Salary */}
             <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow p-6 border border-green-100 flex items-center">
               <div className="flex-1">
                 <p className="text-lg font-bold text-green-700 mb-1">Total Salary</p>
                 <h2 className="text-2xl font-extrabold text-green-800 mb-1">
                   AED {(payrollData.reduce((sum, emp) => sum + emp.baseSalary, 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </h2>
-                
               </div>
               <span className="ml-4 bg-green-100 rounded-full p-4">
                 <svg className="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -428,7 +466,6 @@ const PayrollReports: React.FC = () => {
                 </svg>
               </span>
             </div>
-            {/* Deductions */}
             <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-xl shadow p-6 border border-red-100 flex items-center">
               <div className="flex-1">
                 <p className="text-lg font-bold text-red-700 mb-1">Total Deductions</p>
@@ -443,7 +480,6 @@ const PayrollReports: React.FC = () => {
                 </svg>
               </span>
             </div>
-            {/* Net Payroll */}
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl shadow p-6 border border-blue-100 flex items-center">
               <div className="flex-1">
                 <p className="text-lg font-bold text-blue-700 mb-1">Net Payroll</p>
@@ -460,8 +496,6 @@ const PayrollReports: React.FC = () => {
             </div>
           </div>
         )}
-
-        {/* TABLE - Rest of your existing table code remains exactly the same */}
         {!noData && payrollData.length > 0 && (
           <div className="bg-white rounded-xl shadow border border-gray-100 overflow-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-gray-50 to-blue-50">
@@ -480,20 +514,92 @@ const PayrollReports: React.FC = () => {
                 <thead className="bg-gradient-to-r from-gray-100 to-blue-100 sticky top-0 z-10 rounded-t-xl">
                   <tr>
                     <th className="py-3 px-4 font-bold text-gray-600 text-left">#</th>
-                    <th className="py-3 px-4 font-bold text-blue-700 text-left">Emp ID</th>
-                    <th className="py-3 px-4 font-bold text-gray-700 text-center">Present</th>
-                    <th className="py-3 px-4 font-bold text-gray-700 text-center">Late</th>
-                    <th className="py-3 px-4 font-bold text-gray-700 text-center">Absent</th>
-                    <th className="py-3 px-4 font-bold text-gray-700 text-center">Half</th>
-                    <th className="py-3 px-4 font-bold text-gray-700 text-center">Excess</th>
-                    <th className="py-3 px-4 font-bold text-green-700 text-center">Base</th>
-                    <th className="py-3 px-4 font-bold text-red-700 text-center">Deduct</th>
-                    <th className="py-3 px-4 font-bold text-blue-700 text-center">Net</th>
+                    <th 
+                      className="py-3 px-4 font-bold text-blue-700 text-left cursor-pointer hover:bg-blue-200 transition-colors select-none"
+                      onClick={() => handleSort('employeeId')}
+                    >
+                      <div className="flex items-center justify-start">
+                        Emp ID
+                        {renderSortIcon('employeeId')}
+                      </div>
+                    </th>
+                    <th 
+                      className="py-3 px-4 font-bold text-gray-700 text-center cursor-pointer hover:bg-blue-200 transition-colors select-none"
+                      onClick={() => handleSort('presentDays')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Present
+                        {renderSortIcon('presentDays')}
+                      </div>
+                    </th>
+                    <th 
+                      className="py-3 px-4 font-bold text-gray-700 text-center cursor-pointer hover:bg-blue-200 transition-colors select-none"
+                      onClick={() => handleSort('lateDays')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Late
+                        {renderSortIcon('lateDays')}
+                      </div>
+                    </th>
+                    <th 
+                      className="py-3 px-4 font-bold text-gray-700 text-center cursor-pointer hover:bg-blue-200 transition-colors select-none"
+                      onClick={() => handleSort('absentDays')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Absent
+                        {renderSortIcon('absentDays')}
+                      </div>
+                    </th>
+                    <th 
+                      className="py-3 px-4 font-bold text-gray-700 text-center cursor-pointer hover:bg-blue-200 transition-colors select-none"
+                      onClick={() => handleSort('halfDays')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Half
+                        {renderSortIcon('halfDays')}
+                      </div>
+                    </th>
+                    <th 
+                      className="py-3 px-4 font-bold text-gray-700 text-center cursor-pointer hover:bg-blue-200 transition-colors select-none"
+                      onClick={() => handleSort('excessLeaves')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Excess
+                        {renderSortIcon('excessLeaves')}
+                      </div>
+                    </th>
+                    <th 
+                      className="py-3 px-4 font-bold text-green-700 text-center cursor-pointer hover:bg-blue-200 transition-colors select-none"
+                      onClick={() => handleSort('baseSalary')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Base
+                        {renderSortIcon('baseSalary')}
+                      </div>
+                    </th>
+                    <th 
+                      className="py-3 px-4 font-bold text-red-700 text-center cursor-pointer hover:bg-blue-200 transition-colors select-none"
+                      onClick={() => handleSort('totalDeductions')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Deduct
+                        {renderSortIcon('totalDeductions')}
+                      </div>
+                    </th>
+                    <th 
+                      className="py-3 px-4 font-bold text-blue-700 text-center cursor-pointer hover:bg-blue-200 transition-colors select-none"
+                      onClick={() => handleSort('netSalary')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Net
+                        {renderSortIcon('netSalary')}
+                      </div>
+                    </th>
                     <th className="py-3 px-4 font-bold text-gray-700 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {payrollData.map((emp, i) => (
+                  {sortedPayrollData.map((emp, i) => (
                     <tr
                       key={emp.employeeId}
                       className="hover:bg-blue-50 cursor-pointer transition"
@@ -542,7 +648,6 @@ const PayrollReports: React.FC = () => {
                 </tbody>
               </table>
             </div>
-            {/* PAGINATION */}
             <div className="flex flex-wrap items-center justify-between px-6 py-3 border-t bg-gradient-to-r from-gray-50 to-blue-50">
               <div className="text-gray-600 text-sm">
                 Showing <span className="font-bold">{summary ? (page - 1) * pageSize + 1 : 0}</span>–<span className="font-bold">{summary ? (page - 1) * pageSize + payrollData.length : 0}</span> of <span className="font-bold">{summary ? summary.totalEmployees : 0}</span> employees
@@ -589,3 +694,4 @@ const PayrollReports: React.FC = () => {
 };
 
 export default PayrollReports;
+

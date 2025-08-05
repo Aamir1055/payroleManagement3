@@ -55,7 +55,10 @@ const MasterDataTable: React.FC<MasterDataTableProps> = ({
       case 'position':
         return [
           { key: 'position_id', label: 'Position ID' },
-          { key: 'position_name', label: 'Position Name' }
+          { key: 'position_name', label: 'Position Name' },
+          { key: 'office_name', label: 'Office' },
+          { key: 'reporting_time', label: 'Reporting Time' },
+          { key: 'duty_hours', label: 'Duty Hours' }
         ];
       case 'visaType':
         return [
