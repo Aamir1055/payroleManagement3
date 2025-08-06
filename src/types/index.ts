@@ -37,6 +37,7 @@ export interface AttendanceRecord {
   isLate: boolean;
   isHalfDay: boolean;
   isAbsent: boolean;
+  approvedLeave?: boolean; // New field for approved leave checkbox
 }
 
 export interface PayrollRecord {
@@ -51,6 +52,7 @@ export interface PayrollRecord {
   lateDays: number;
   leaves: number;
   excessLeaves: number;
+  approvedLeaves: number; // New field for approved leaves count
   deductionDays: number;
   grossSalary: number;
   deductions: number;
@@ -89,4 +91,14 @@ export interface PayrollSummary {
   totalDeductions: number;
   presentEmployees: number;
   absentEmployees: number;
+}
+
+export interface ApprovedLeave {
+  id: number;
+  employee_id: string;
+  date: string;
+  approved_by?: string;
+  reason?: string;
+  created_at: string;
+  updated_at: string;
 }
