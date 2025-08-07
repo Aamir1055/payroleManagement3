@@ -67,11 +67,11 @@ async function setupUsers() {
       );
     }
 
-    console.log('✅ Office assignments completed');
-    console.log('\n👥 Login Credentials:');
-    console.log('🔐 Admin: admin / admin123');
-    console.log('🏢 HR: hr / hr123');
-    console.log('👨‍💼 Floor Manager: floormanager / manager123');
+    // console.log('✅ Office assignments completed');
+    // console.log('\n👥 Login Credentials:');
+    // console.log('🔐 Admin: admin / admin123');
+    // console.log('🏢 HR: hr / hr123');
+    // console.log('👨‍💼 Floor Manager: floormanager / manager123');
 
   } catch (error) {
     console.error('❌ Setup failed:', error);
