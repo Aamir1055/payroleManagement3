@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MainLayout } from '../components/Layout/MainLayout';
 import axios from '../api/axios';
@@ -33,6 +33,13 @@ interface AttendanceRow {
   punch_out: string;
 }
 
+interface ApprovedLeave {
+  id: string;
+  employeeId: string;
+  date: string;
+  isApproved: boolean;
+}
+
 const EmployeePayrollDetails: React.FC = () => {
   const { employeeId } = useParams<{ employeeId: string }>();
   const navigate = useNavigate();
@@ -50,7 +57,6 @@ const EmployeePayrollDetails: React.FC = () => {
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [error, setError] = useState('');
   const [processingLeaves, setProcessingLeaves] = useState<Set<string>>(new Set());
-  const [showMissingDatesDetails, setShowMissingDatesDetails] = useState(false);
   
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -64,20 +70,20 @@ const EmployeePayrollDetails: React.FC = () => {
   const [sortField, setSortField] = useState<keyof DailyRow | 'approvedLeave' | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
+  // Generate unique key for row to force re-render when approved status changes
+  const generateRowKey = useCallback((row: DailyRow) => {
+    const dateKey = `${row.employeeId}-${row.date}`;
+    const isApproved = approvedLeaves.has(dateKey);
+    return `${dateKey}-${isApproved ? 'approved' : 'regular'}-${row.workingHours}-${row.absentDays}`;
+  }, [approvedLeaves]);
+
   // Check if date is approved leave
   const isApprovedLeave = useCallback((empId: string, date: string) => {
     return approvedLeaves.has(`${empId}-${date}`);
   }, [approvedLeaves]);
 
-  // Calculate payroll data with missing dates
-  const payrollData = useMemo(() => {
-    console.log('🔄 Calculating payroll data...', {
-      employeeExists: !!employee,
-      dailyRowsCount: dailyRows.length,
-      approvedLeavesCount: approvedLeaves.size,
-      workingDays
-    });
-
+  // Calculate payroll data
+  const calculatePayroll = useCallback(() => {
     if (!employee) {
       return {
         baseSalary: 0,
@@ -88,7 +94,6 @@ const EmployeePayrollDetails: React.FC = () => {
         actualAbsentDays: 0,
         approvedLeaveDays: 0,
         missingDays: 0,
-        missingDates: [] as string[],
         excessLeaves: 0,
         totalDeductions: 0,
         netSalary: 0,
@@ -119,9 +124,7 @@ const EmployeePayrollDetails: React.FC = () => {
 
     dailyRows.forEach(row => {
       const dateKey = `${row.employeeId}-${row.date}`;
-      const isApproved = approvedLeaves.has(dateKey);
-      
-      if (!isApproved) {
+      if (!approvedLeaves.has(dateKey)) {
         // Only count non-approved leave days
         actualPresentDays += row.presentDays || 0;
         totalHalfDays += row.halfDays || 0;
@@ -134,16 +137,15 @@ const EmployeePayrollDetails: React.FC = () => {
       }
     });
 
-    // Calculate missing days and dates (working days without attendance records or approved leaves)
+    // Calculate missing days (working days without attendance records or approved leaves)
     const allRecordedDates = new Set(dailyRows.map(row => moment(row.date).format('YYYY-MM-DD')));
     const approvedLeaveDates = new Set(
       Array.from(approvedLeaves).map(key => key.split('-').slice(1).join('-'))
     );
     
-    const missingDates = workingDaysArray.filter(date => 
+    const missingDays = workingDaysArray.filter(date => 
       !allRecordedDates.has(date) && !approvedLeaveDates.has(date)
-    );
-    const missingDays = missingDates.length;
+    ).length;
 
     // Calculate deductions
     const absentDaysDeduction = actualAbsentDays * perDaySalary;
@@ -170,7 +172,6 @@ const EmployeePayrollDetails: React.FC = () => {
       actualAbsentDays: displayAbsentDays,
       approvedLeaveDays,
       missingDays,
-      missingDates,
       excessLeaves,
       totalDeductions: cappedDeductions,
       netSalary,
@@ -186,99 +187,49 @@ const EmployeePayrollDetails: React.FC = () => {
     };
   }, [employee, dailyRows, workingDays, workingDaysArray, approvedLeaves]);
 
-  // Format date helper
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-
-  // 🔥 Helper function to fetch data without showing loading state
-  const fetchDetailsWithoutLoading = async (monthYear?: string) => {
-    if (!employeeId) return;
-    
-    try {
-      const params: any = {};
-      const useMonthYear = monthYear || selectedMonth;
-      if (useMonthYear) {
-        const fromDate = `${useMonthYear}-01`;
-        const lastDay = moment(useMonthYear, 'YYYY-MM').daysInMonth();
-        const toDate = `${useMonthYear}-${lastDay.toString().padStart(2, '0')}`;
-        params.fromDate = fromDate;
-        params.toDate = toDate;
-      }
-      
-      const { data } = await axios.get(`/payroll/employee/${employeeId}`, { params });
-      setEmployee(data.employee);
-
-      const rowsWithWorkingHours = (data.dailyRows || []).map((row: any) => {
-        let workingHours = 0;
-        if (row.punch_in && row.punch_out) {
-          const punchIn = moment(row.punch_in, 'HH:mm:ss');
-          const punchOut = moment(row.punch_out, 'HH:mm:ss');
-          const duration = moment.duration(punchOut.diff(punchIn));
-          workingHours = parseFloat(duration.asHours().toFixed(2));
-        }
-        return { ...row, workingHours };
-      });
-
-      setDailyRows(rowsWithWorkingHours);
-      
-    } catch (err: any) {
-      console.error('Error fetching details:', err);
-    }
-  };
-
-  // 🔥 IMPROVED: Better approved leaves refresh function
-  const refreshApprovedLeavesOnly = async () => {
-    if (!employeeId || !selectedMonth) return;
-    
-    try {
-      const [year, month] = selectedMonth.split('-');
-      const { data } = await axios.get(`/approved-leaves/${employeeId}?year=${year}&month=${month}`);
-      
-      const approvedLeavesSet = new Set<string>();
-      if (data.data && Array.isArray(data.data)) {
-        data.data.forEach((leave: any) => {
-          const dateKey = `${employeeId}-${leave.date}`;
-          approvedLeavesSet.add(dateKey);
-        });
-      }
-      
-      console.log('🔄 Refreshed approved leaves:', Array.from(approvedLeavesSet));
-      setApprovedLeaves(approvedLeavesSet);
-      
-    } catch (error: any) {
-      console.error('Error refreshing approved leaves:', error);
-    }
-  };
-
-  // 🔥 FIXED: Real-time approved leave toggle with complete data refresh
-  const handleApprovedLeaveToggle = async (empId: string, date: string, isChecked: boolean, event: React.ChangeEvent<HTMLInputElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    
+  // Handle approved leave toggle
+  const handleApprovedLeaveToggle = async (empId: string, date: string, isChecked: boolean) => {
     const dateKey = `${empId}-${date}`;
     
+    // Prevent multiple simultaneous operations on the same date
     if (processingLeaves.has(dateKey)) {
       return;
     }
 
     console.log(`🔄 Toggling approved leave: ${dateKey} -> ${isChecked}`);
+    
+    // Add to processing set
     setProcessingLeaves(prev => new Set([...prev, dateKey]));
 
-    // Store current scroll position to restore after data refresh
-    const scrollContainer = document.querySelector('.max-h-\\[550px\\]');
-    const currentScrollTop = scrollContainer?.scrollTop || 0;
-
     try {
-      // 1. Backend operations first
       if (isChecked) {
-        console.log(`✅ Adding approved leave for ${dateKey} to backend`);
+        // Adding approved leave
+        console.log(`✅ Adding approved leave for ${dateKey}`);
         
+        // Optimistically update UI first
+        setApprovedLeaves(prev => new Set([...prev, dateKey]));
+        
+        // Update the corresponding daily row to clear attendance data
+        setDailyRows(prev => 
+          prev.map(row => {
+            if (row.employeeId === empId && row.date === date) {
+              return {
+                ...row,
+                punch_in: '',
+                punch_out: '',
+                workingHours: 0,
+                presentDays: 0,
+                lateDays: 0,
+                halfDays: 0,
+                absentDays: 1,
+                excessLeaves: 0
+              };
+            }
+            return row;
+          })
+        );
+
+        // Call backend
         await axios.post('/approved-leaves/add', {
           employee_id: empId,
           date: moment(date).format('YYYY-MM-DD'),
@@ -295,9 +246,56 @@ const EmployeePayrollDetails: React.FC = () => {
         } catch (attendanceError) {
           console.log('ℹ️ No existing attendance record to update');
         }
+
       } else {
-        console.log(`❌ Removing approved leave for ${dateKey} from backend`);
+        // Removing approved leave
+        console.log(`❌ Removing approved leave for ${dateKey}`);
         
+        // Optimistically update UI first
+        setApprovedLeaves(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(dateKey);
+          return newSet;
+        });
+        
+        // Restore the row based on original attendance data or mark as absent
+        setDailyRows(prev => 
+          prev.map(row => {
+            if (row.employeeId === empId && row.date === date) {
+              // If there was working hours, restore attendance calculations
+              const workingHours = row.workingHours || 0;
+              let presentDays = 0;
+              let halfDays = 0;
+              let absentDays = 0;
+              let lateDays = 0;
+              let excessLeaves = 0;
+
+              if (row.punch_in && row.punch_out && workingHours > 0) {
+                if (workingHours >= 8) {
+                  presentDays = 1;
+                } else if (workingHours >= 4) {
+                  halfDays = 1;
+                } else {
+                  presentDays = 0.5;
+                }
+              } else {
+                absentDays = 1;
+              }
+
+              return {
+                ...row,
+                presentDays,
+                lateDays,
+                halfDays,
+                absentDays,
+                excessLeaves
+              };
+            }
+            return row;
+          })
+        );
+
+        // Call backend
         await axios.delete('/approved-leaves/remove', {
           data: {
             employee_id: empId,
@@ -308,28 +306,23 @@ const EmployeePayrollDetails: React.FC = () => {
 
       console.log(`✅ Successfully ${isChecked ? 'added' : 'removed'} approved leave for ${dateKey}`);
 
-      // 2. Refresh all data but preserve scroll position
-      console.log('🔄 Refreshing all data with scroll preservation...');
-      
-      // Refresh both attendance data and approved leaves
-      await Promise.all([
-        fetchDetailsWithoutLoading(selectedMonth),
-        refreshApprovedLeavesOnly()
-      ]);
-
-      // Restore scroll position after data is loaded
-      setTimeout(() => {
-        if (scrollContainer) {
-          scrollContainer.scrollTop = currentScrollTop;
-        }
-      }, 100);
-
-      console.log(`✅ Data refreshed successfully for ${dateKey}`);
-
     } catch (error: any) {
-      console.error(`❌ Error toggling approved leave:`, error);
+      console.error(`❌ Error ${isChecked ? 'adding' : 'removing'} approved leave:`, error);
+      
+      // Revert optimistic updates on error
+      if (isChecked) {
+        setApprovedLeaves(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(dateKey);
+          return newSet;
+        });
+      } else {
+        setApprovedLeaves(prev => new Set([...prev, dateKey]));
+      }
+      
       alert(`Failed to ${isChecked ? 'add' : 'remove'} approved leave: ${error.response?.data?.message || error.message}`);
     } finally {
+      // Remove from processing set
       setProcessingLeaves(prev => {
         const newSet = new Set(prev);
         newSet.delete(dateKey);
@@ -354,15 +347,14 @@ const EmployeePayrollDetails: React.FC = () => {
         });
       }
       
-      console.log('📥 Setting approved leaves:', Array.from(approvedLeavesSet));
+      console.log('📥 Fetched approved leaves:', Array.from(approvedLeavesSet));
       setApprovedLeaves(approvedLeavesSet);
-      
     } catch (error: any) {
       console.error('Error fetching approved leaves:', error);
-      setApprovedLeaves(new Set());
     }
   };
 
+  // Fetch employee details
   const fetchDetails = async (monthYear?: string) => {
     if (!employeeId) return;
     setLoading(true);
@@ -394,15 +386,14 @@ const EmployeePayrollDetails: React.FC = () => {
       });
 
       setDailyRows(rowsWithWorkingHours);
-      
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch details');
-      console.error('Error fetching details:', err);
     } finally {
       setLoading(false);
     }
   };
 
+  // Fetch working days
   const fetchWorkingDays = async (monthYear?: string) => {
     setCalendarLoading(true);
     try {
@@ -441,6 +432,7 @@ const EmployeePayrollDetails: React.FC = () => {
     }
   };
 
+  // Generate working days array
   const generateWorkingDaysArray = (year: number, month: number): string[] => {
     const workingDays: string[] = [];
     const daysInMonth = moment({ year, month: month - 1 }).daysInMonth();
@@ -454,7 +446,7 @@ const EmployeePayrollDetails: React.FC = () => {
     return workingDays;
   };
 
-  // Simple sort handling
+  // Sorting logic
   const handleSort = (field: keyof DailyRow | 'approvedLeave') => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -491,9 +483,9 @@ const EmployeePayrollDetails: React.FC = () => {
 
   const openEditModal = async (empId: string, date: string) => {
     const dateKey = `${empId}-${date}`;
-    const isApprovedLeave = approvedLeaves.has(dateKey);
+    const isApproved = approvedLeaves.has(dateKey);
     
-    if (isApprovedLeave) {
+    if (isApproved) {
       alert('Cannot edit attendance for approved leave. Please uncheck approved leave first.');
       return;
     }
@@ -525,8 +517,7 @@ const EmployeePayrollDetails: React.FC = () => {
     setModalAttendance((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
-  const handleModalAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleModalAdd = async () => {
     if (!modalAttendance) return;
     setModalError('');
     setModalLoading(true);
@@ -558,8 +549,7 @@ const EmployeePayrollDetails: React.FC = () => {
     }
   };
 
-  const handleModalUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleModalUpdate = async () => {
     if (!modalAttendance) return;
     setModalError('');
     setModalLoading(true);
@@ -603,7 +593,7 @@ const EmployeePayrollDetails: React.FC = () => {
     }
   };
 
-  // useEffect hooks
+  // Effects
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const fromDateParam = p.get('fromDate');
@@ -616,31 +606,22 @@ const EmployeePayrollDetails: React.FC = () => {
   }, [employeeId]);
 
   useEffect(() => {
-    if (selectedMonth && employeeId) {
-      console.log('🔄 Fetching initial data for month:', selectedMonth);
-      const fetchAllData = async () => {
-        try {
-          await Promise.all([
-            fetchDetails(selectedMonth),
-            fetchWorkingDays(selectedMonth),
-            fetchApprovedLeaves()
-          ]);
-        } catch (error) {
-          console.error('Error fetching data:', error);
-        }
-      };
-      
-      fetchAllData();
+    if (selectedMonth) {
+      fetchDetails(selectedMonth);
+      fetchWorkingDays(selectedMonth);
+      fetchApprovedLeaves();
     }
   }, [selectedMonth, employeeId]);
+
+  // Calculate payroll data
+  const payrollData = calculatePayroll();
 
   // Sort daily rows
   const sortedDailyRows = sortField ? 
     [...dailyRows].sort((a, b) => {
       if (sortField === 'approvedLeave') {
-        // Sort by approved leave status (checked first or last)
-        const aApproved = approvedLeaves.has(`${a.employeeId}-${a.date}`) ? 1 : 0;
-        const bApproved = approvedLeaves.has(`${b.employeeId}-${b.date}`) ? 1 : 0;
+        const aApproved = isApprovedLeave(a.employeeId, a.date) ? 1 : 0;
+        const bApproved = isApprovedLeave(b.employeeId, b.date) ? 1 : 0;
         const comparison = aApproved - bApproved;
         return sortDirection === 'asc' ? comparison : -comparison;
       }
@@ -657,7 +638,7 @@ const EmployeePayrollDetails: React.FC = () => {
       return 0;
     }) : dailyRows;
 
-  // Early returns after all hooks
+  // Loading states
   if (loading || calendarLoading) {
     return (
       <MainLayout title="Loading…">
@@ -684,11 +665,7 @@ const EmployeePayrollDetails: React.FC = () => {
         {/* Header Actions */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              navigate(-1);
-            }}
+            onClick={() => navigate(-1)}
             className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 border border-blue-300 text-blue-700 rounded hover:bg-blue-200 transition focus:outline-none focus:ring-2 focus:ring-blue-400"
             aria-label="Back to Payroll Reports"
           >
@@ -699,11 +676,7 @@ const EmployeePayrollDetails: React.FC = () => {
           </button>
           <div className="flex gap-2">
             <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                openAddModal();
-              }}
+              onClick={openAddModal}
               className="flex items-center gap-2 px-4 py-1.5 font-semibold bg-green-500 text-white rounded hover:bg-green-600 transition focus:outline-none focus:ring-2 focus:ring-green-400"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -712,9 +685,7 @@ const EmployeePayrollDetails: React.FC = () => {
               Add Attendance
             </button>
             <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
+              onClick={() => {
                 if (dailyRows.length === 0) return;
                 const exportData = dailyRows.map(row => ({
                   Date: moment(row.date).format('YYYY-MM-DD'),
@@ -813,7 +784,7 @@ const EmployeePayrollDetails: React.FC = () => {
           </div>
         </div>
 
-        {/* Missing Days Information Card - UPDATED */}
+        {/* Missing Days Information Card */}
         {payrollData.missingDays > 0 && (
           <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
             <div className="flex items-center gap-3">
@@ -822,39 +793,12 @@ const EmployeePayrollDetails: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
                 </svg>
               </div>
-              <div className="flex-1">
+              <div>
                 <h3 className="text-lg font-bold text-amber-800">Missing Attendance Days</h3>
-                <div className="mt-2">
-                  <p className="text-sm text-amber-700 mb-2">
-                    {payrollData.missingDays} working days have no attendance records.
-                    <button 
-                      onClick={() => setShowMissingDatesDetails(!showMissingDatesDetails)}
-                      className="ml-2 text-blue-600 underline hover:text-blue-800 transition"
-                    >
-                      {showMissingDatesDetails ? 'Hide' : 'Show'} dates
-                    </button>
-                  </p>
-                  
-                  {showMissingDatesDetails && payrollData.missingDates && payrollData.missingDates.length > 0 && (
-                    <div className="mt-3 p-3 bg-amber-100 border border-amber-300 rounded">
-                      <strong className="text-amber-800">Missing dates:</strong>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {payrollData.missingDates.map((date, index) => (
-                          <span 
-                            key={index}
-                            className="inline-block px-2 py-1 bg-amber-200 text-amber-800 text-xs rounded font-medium"
-                          >
-                            {formatDate(date)}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  <p className="text-sm text-amber-700 mt-2">
-                    Deduction applied: AED {payrollData.deductionBreakdown.missingDaysDeduction.toFixed(2)}
-                  </p>
-                </div>
+                <p className="text-sm text-amber-700">
+                  {payrollData.missingDays} working days have no attendance records. 
+                  Deduction applied: AED {payrollData.deductionBreakdown.missingDaysDeduction.toFixed(2)}
+                </p>
               </div>
             </div>
           </div>
@@ -950,32 +894,33 @@ const EmployeePayrollDetails: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {sortedDailyRows.map((row, index) => {
-                    const isApprovedLeave = approvedLeaves.has(`${row.employeeId}-${row.date}`);
-                    const uniqueKey = `${row.employeeId}-${row.date}-${index}`;
+                    const dateKey = `${row.employeeId}-${row.date}`;
+                    const isApproved = isApprovedLeave(row.employeeId, row.date);
+                    const isProcessing = processingLeaves.has(dateKey);
+                    const rowKey = generateRowKey(row);
                     
                     return (
                       <tr
-                        key={uniqueKey}
+                        key={rowKey}
                         className={`transition ${
-                          isApprovedLeave 
+                          isApproved 
                             ? 'bg-green-50 border-l-4 border-green-400' 
                             : 'hover:bg-blue-50 cursor-pointer'
                         }`}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          if (!isApprovedLeave) {
+                        onClick={() => {
+                          if (!isApproved) {
                             openEditModal(row.employeeId, row.date);
                           }
                         }}
                         style={{ 
-                          cursor: isApprovedLeave ? 'not-allowed' : 'pointer',
-                          opacity: isApprovedLeave ? 0.8 : 1 
+                          cursor: isApproved ? 'not-allowed' : 'pointer',
+                          opacity: isApproved ? 0.8 : 1 
                         }}
                       >
                         <td className="py-3 px-4 whitespace-nowrap font-semibold text-gray-800">
                           <div className="flex items-center gap-2">
                             {moment(row.date).format('YYYY-MM-DD')}
-                            {isApprovedLeave && (
+                            {isApproved && (
                               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                 Approved Leave
                               </span>
@@ -983,42 +928,42 @@ const EmployeePayrollDetails: React.FC = () => {
                           </div>
                         </td>
                         <td className="py-3 px-4 text-center font-semibold text-blue-700">
-                          {isApprovedLeave ? (
+                          {isApproved ? (
                             <span className="text-gray-400">-</span>
                           ) : (
                             row.workingHours ? `${row.workingHours} h` : '0'
                           )}
                         </td>
                         <td className="py-3 px-4 text-center font-semibold text-green-700">
-                          {isApprovedLeave ? (
+                          {isApproved ? (
                             <span className="text-gray-400">-</span>
                           ) : (
                             row.presentDays
                           )}
                         </td>
                         <td className="py-3 px-4 text-center font-semibold text-yellow-700">
-                          {isApprovedLeave ? (
+                          {isApproved ? (
                             <span className="text-gray-400">-</span>
                           ) : (
                             row.lateDays
                           )}
                         </td>
                         <td className="py-3 px-4 text-center font-semibold text-indigo-700">
-                          {isApprovedLeave ? (
+                          {isApproved ? (
                             <span className="text-gray-400">-</span>
                           ) : (
                             row.halfDays
                           )}
                         </td>
                         <td className="py-3 px-4 text-center font-semibold text-red-700">
-                          {isApprovedLeave ? (
+                          {isApproved ? (
                             <span className="font-semibold text-red-700">1</span>
                           ) : (
                             row.absentDays
                           )}
                         </td>
                         <td className="py-3 px-4 text-center font-semibold text-pink-700">
-                          {isApprovedLeave ? (
+                          {isApproved ? (
                             <span className="text-gray-400">-</span>
                           ) : (
                             row.excessLeaves
@@ -1026,12 +971,9 @@ const EmployeePayrollDetails: React.FC = () => {
                         </td>
                         <td 
                           className="py-3 px-4 text-center"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                          }}
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          {processingLeaves.has(`${row.employeeId}-${row.date}`) ? (
+                          {isProcessing ? (
                             <div className="w-5 h-5 mx-auto">
                               <div className="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
                             </div>
@@ -1039,38 +981,38 @@ const EmployeePayrollDetails: React.FC = () => {
                             <input
                               type="checkbox"
                               className="w-5 h-5 text-teal-600 bg-gray-100 border-gray-300 rounded focus:ring-teal-500 focus:ring-2 cursor-pointer"
-                              checked={isApprovedLeave}
+                              checked={isApproved}
                               onChange={(e) => {
-                                handleApprovedLeaveToggle(row.employeeId, row.date, e.target.checked, e);
+                                e.stopPropagation();
+                                handleApprovedLeaveToggle(row.employeeId, row.date, e.target.checked);
                               }}
-                              disabled={processingLeaves.has(`${row.employeeId}-${row.date}`)}
+                              onClick={(e) => e.stopPropagation()}
+                              disabled={isProcessing}
                               title={`Toggle approved leave for ${moment(row.date).format('YYYY-MM-DD')}`}
                             />
                           )}
                         </td>
                         <td className="py-3 px-4 text-center">
                           <button
-                            type="button"
                             className={`inline-flex items-center gap-1 px-3 py-1.5 font-medium rounded-full shadow-sm transition ${
-                              isApprovedLeave 
+                              isApproved 
                                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white'
                             }`}
                             onClick={(e) => {
-                              e.preventDefault();
                               e.stopPropagation();
-                              if (!isApprovedLeave) {
+                              if (!isApproved) {
                                 openEditModal(row.employeeId, row.date);
                               }
                             }}
-                            disabled={isApprovedLeave}
-                            title={isApprovedLeave ? 'Cannot edit approved leave' : 'Edit attendance'}
+                            disabled={isApproved}
+                            title={isApproved ? 'Cannot edit approved leave' : 'Edit attendance'}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
-                            {isApprovedLeave ? 'Locked' : 'View'}
+                            {isApproved ? 'Locked' : 'View'}
                           </button>
                         </td>
                       </tr>
@@ -1089,9 +1031,7 @@ const EmployeePayrollDetails: React.FC = () => {
               <div className="flex justify-between items-center mb-3">
                 <h2 className="text-xl font-semibold text-blue-700">{modalMode === 'add' ? 'Add Attendance' : 'Edit Attendance'}</h2>
                 <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
+                  onClick={() => {
                     setModalOpen(false);
                     setModalNotification('');
                   }}
@@ -1126,7 +1066,10 @@ const EmployeePayrollDetails: React.FC = () => {
               ) : modalAttendance && (
                 <form
                   className="space-y-4"
-                  onSubmit={modalMode === 'add' ? handleModalAdd : handleModalUpdate}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    modalMode === 'add' ? handleModalAdd() : handleModalUpdate();
+                  }}
                 >
                   <div>
                     <label htmlFor="modalDate" className="block font-medium text-gray-700 mb-1 text-sm">
@@ -1171,10 +1114,7 @@ const EmployeePayrollDetails: React.FC = () => {
                   <div className="flex justify-between mt-4 gap-4">
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleModalDelete();
-                      }}
+                      onClick={handleModalDelete}
                       className={`flex-1 px-4 py-2 rounded-md font-semibold transition ${
                         modalMode === 'add'
                           ? 'bg-red-200 text-red-400 cursor-not-allowed'

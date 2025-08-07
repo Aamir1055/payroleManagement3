@@ -6,9 +6,9 @@ async function setupUsers() {
     console.log('🔄 Setting up test users...');
 
     // Hash passwords
-    const adminPassword = await bcrypt.hash('admin123', 10);
-    const hrPassword = await bcrypt.hash('hr123', 10);
-    const managerPassword = await bcrypt.hash('manager123', 10);
+    // const adminPassword = await bcrypt.hash('admin123', 10);
+    // const hrPassword = await bcrypt.hash('hr123', 10);
+    // const managerPassword = await bcrypt.hash('manager123', 10);
 
     // Clear existing users first
     await query('DELETE FROM user_offices');
@@ -67,11 +67,11 @@ async function setupUsers() {
       );
     }
 
-    console.log('✅ Office assignments completed');
-    console.log('\n👥 Login Credentials:');
-    console.log('🔐 Admin: admin / admin123');
-    console.log('🏢 HR: hr / hr123');
-    console.log('👨‍💼 Floor Manager: floormanager / manager123');
+    // console.log('✅ Office assignments completed');
+    // console.log('\n👥 Login Credentials:');
+    // console.log('🔐 Admin: admin / admin123');
+    // console.log('🏢 HR: hr / hr123');
+    // console.log('👨‍💼 Floor Manager: floormanager / manager123');
 
   } catch (error) {
     console.error('❌ Setup failed:', error);

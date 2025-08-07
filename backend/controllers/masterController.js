@@ -256,35 +256,33 @@ exports.getAllPositions = async (req, res) => {
 // Create a new position
 exports.createPosition = async (req, res) => {
   try {
-    const { title, description, office_id, reporting_time, duty_hours } = req.body;
+    const { title, description, office_name, reporting_time, duty_hours } = req.body;
     
     if (!title) {
       return res.status(400).json({ error: 'Position title is required' });
     }
     
-    // Check if position exists
-    let posResult = await query('SELECT id FROM positions WHERE title = ?', [title]);
-    let positionId;
+    // Always create a new position (don't reuse existing ones)
+    const newPosResult = await query(
+      'INSERT INTO positions (title, description) VALUES (?, ?)', 
+      [title, description || '']
+    );
+    const positionId = newPosResult.insertId;
     
-    if (posResult.length > 0) {
-      positionId = posResult[0].id;
-    } else {
-      // Create new position
-      const newPosResult = await query(
-        'INSERT INTO positions (title, description) VALUES (?, ?)', 
-        [title, description || '']
-      );
-      positionId = newPosResult.insertId;
-    }
-    
-    // If office_id is provided, create office-position relationship
-    if (office_id && reporting_time && duty_hours) {
+    // If office_name is provided, create office-position relationship
+    if (office_name && reporting_time && duty_hours) {
+      // Get office_id from office name
+      const officeResult = await query('SELECT id FROM offices WHERE name = ?', [office_name]);
+      
+      if (officeResult.length === 0) {
+        return res.status(400).json({ error: 'Office not found' });
+      }
+      
+      const office_id = officeResult[0].id;
+      
       await query(`
         INSERT INTO office_positions (office_id, position_id, reporting_time, duty_hours)
         VALUES (?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE 
-        reporting_time = VALUES(reporting_time),
-        duty_hours = VALUES(duty_hours)
       `, [office_id, positionId, reporting_time, duty_hours]);
     }
     
@@ -292,7 +290,7 @@ exports.createPosition = async (req, res) => {
       id: positionId, 
       title, 
       description: description || '',
-      office_id: office_id || null,
+      office_name: office_name || null,
       reporting_time: reporting_time || null,
       duty_hours: duty_hours || null,
       message: 'Position created successfully'
@@ -310,7 +308,7 @@ exports.createPosition = async (req, res) => {
 exports.updatePosition = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, office_id, reporting_time, duty_hours } = req.body;
+    const { title, description, office_name, reporting_time, duty_hours } = req.body;
     
     if (!title) {
       return res.status(400).json({ error: 'Position title is required' });
@@ -326,14 +324,24 @@ exports.updatePosition = async (req, res) => {
       return res.status(404).json({ error: 'Position not found' });
     }
     
-    // Update office-position relationship if office_id is provided
-    if (office_id && reporting_time && duty_hours) {
+    // Update office-position relationship if office_name is provided
+    if (office_name && reporting_time && duty_hours) {
+      // Get office_id from office name
+      const officeResult = await query('SELECT id FROM offices WHERE name = ?', [office_name]);
+      
+      if (officeResult.length === 0) {
+        return res.status(400).json({ error: 'Office not found' });
+      }
+      
+      const office_id = officeResult[0].id;
+      
+      // First, delete existing office-position relationships for this position
+      await query('DELETE FROM office_positions WHERE position_id = ?', [id]);
+      
+      // Then insert the new relationship
       await query(`
         INSERT INTO office_positions (office_id, position_id, reporting_time, duty_hours)
         VALUES (?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE 
-        reporting_time = VALUES(reporting_time),
-        duty_hours = VALUES(duty_hours)
       `, [office_id, id, reporting_time, duty_hours]);
     }
     
@@ -341,7 +349,7 @@ exports.updatePosition = async (req, res) => {
       id: parseInt(id), 
       title, 
       description: description || '',
-      office_id: office_id || null,
+      office_name: office_name || null,
       reporting_time: reporting_time || null,
       duty_hours: duty_hours || null,
       message: 'Position updated successfully'

@@ -78,7 +78,8 @@ const MasterData = () => {
       case 'position':
         return (
           item.position_name?.toLowerCase().includes(searchTermLower) ||
-          item.description?.toLowerCase().includes(searchTermLower)
+          item.title?.toLowerCase().includes(searchTermLower) ||
+          item.office_name?.toLowerCase().includes(searchTermLower)
         );
       case 'visaType':
         return (

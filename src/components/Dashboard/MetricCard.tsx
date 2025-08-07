@@ -1,10 +1,10 @@
 import React, { ReactNode } from 'react';
-//import { LucideIcon } from 'lucide-react';
+import { LucideIcon, User, Building } from 'lucide-react';
 
 export interface MetricCardProps {
   title: string;
   value: string | number | ReactNode;
-  //icon: LucideIcon;
+  icon?: LucideIcon;
   color: 'blue' | 'yellow' | 'red' | 'purple' | 'green';
   trend?: {
     value: number;
@@ -23,12 +23,12 @@ const colorClasses: Record<MetricCardProps['color'], string> = {
 export const MetricCard: React.FC<MetricCardProps> = ({
   title,
   value,
-  //icon: Icon,
+  icon: Icon = User,
   color,
   trend,
 }) => {
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6 transform transition duration-300 hover:scale-105 hover:shadow-lg">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-600">{title}</p>
@@ -45,10 +45,11 @@ export const MetricCard: React.FC<MetricCardProps> = ({
           )}
         </div>
 
-        <div className={`p-3 rounded-full ${colorClasses[color]}`}>
-          
+        <div className={`p-3 rounded-full ${colorClasses[color]} flex items-center justify-center`}>
+          <Icon className="w-6 h-6" />
         </div>
       </div>
     </div>
   );
 };
+
