@@ -50,6 +50,7 @@ const EmployeePayrollDetails: React.FC = () => {
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [error, setError] = useState('');
   const [processingLeaves, setProcessingLeaves] = useState<Set<string>>(new Set());
+  const [showMissingDatesDetails, setShowMissingDatesDetails] = useState(false);
   
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -68,7 +69,7 @@ const EmployeePayrollDetails: React.FC = () => {
     return approvedLeaves.has(`${empId}-${date}`);
   }, [approvedLeaves]);
 
-  // Calculate payroll data
+  // Calculate payroll data with missing dates
   const payrollData = useMemo(() => {
     console.log('🔄 Calculating payroll data...', {
       employeeExists: !!employee,
@@ -87,6 +88,7 @@ const EmployeePayrollDetails: React.FC = () => {
         actualAbsentDays: 0,
         approvedLeaveDays: 0,
         missingDays: 0,
+        missingDates: [] as string[],
         excessLeaves: 0,
         totalDeductions: 0,
         netSalary: 0,
@@ -132,15 +134,16 @@ const EmployeePayrollDetails: React.FC = () => {
       }
     });
 
-    // Calculate missing days (working days without attendance records or approved leaves)
+    // Calculate missing days and dates (working days without attendance records or approved leaves)
     const allRecordedDates = new Set(dailyRows.map(row => moment(row.date).format('YYYY-MM-DD')));
     const approvedLeaveDates = new Set(
       Array.from(approvedLeaves).map(key => key.split('-').slice(1).join('-'))
     );
     
-    const missingDays = workingDaysArray.filter(date => 
+    const missingDates = workingDaysArray.filter(date => 
       !allRecordedDates.has(date) && !approvedLeaveDates.has(date)
-    ).length;
+    );
+    const missingDays = missingDates.length;
 
     // Calculate deductions
     const absentDaysDeduction = actualAbsentDays * perDaySalary;
@@ -167,6 +170,7 @@ const EmployeePayrollDetails: React.FC = () => {
       actualAbsentDays: displayAbsentDays,
       approvedLeaveDays,
       missingDays,
+      missingDates,
       excessLeaves,
       totalDeductions: cappedDeductions,
       netSalary,
@@ -181,6 +185,16 @@ const EmployeePayrollDetails: React.FC = () => {
       }
     };
   }, [employee, dailyRows, workingDays, workingDaysArray, approvedLeaves]);
+
+  // Format date helper
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
 
   // 🔥 Helper function to fetch data without showing loading state
   const fetchDetailsWithoutLoading = async (monthYear?: string) => {
@@ -799,7 +813,7 @@ const EmployeePayrollDetails: React.FC = () => {
           </div>
         </div>
 
-        {/* Missing Days Information Card */}
+        {/* Missing Days Information Card - UPDATED */}
         {payrollData.missingDays > 0 && (
           <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
             <div className="flex items-center gap-3">
@@ -808,12 +822,39 @@ const EmployeePayrollDetails: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
                 </svg>
               </div>
-              <div>
+              <div className="flex-1">
                 <h3 className="text-lg font-bold text-amber-800">Missing Attendance Days</h3>
-                <p className="text-sm text-amber-700">
-                  {payrollData.missingDays} working days have no attendance records. 
-                  Deduction applied: AED {payrollData.deductionBreakdown.missingDaysDeduction.toFixed(2)}
-                </p>
+                <div className="mt-2">
+                  <p className="text-sm text-amber-700 mb-2">
+                    {payrollData.missingDays} working days have no attendance records.
+                    <button 
+                      onClick={() => setShowMissingDatesDetails(!showMissingDatesDetails)}
+                      className="ml-2 text-blue-600 underline hover:text-blue-800 transition"
+                    >
+                      {showMissingDatesDetails ? 'Hide' : 'Show'} dates
+                    </button>
+                  </p>
+                  
+                  {showMissingDatesDetails && payrollData.missingDates && payrollData.missingDates.length > 0 && (
+                    <div className="mt-3 p-3 bg-amber-100 border border-amber-300 rounded">
+                      <strong className="text-amber-800">Missing dates:</strong>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {payrollData.missingDates.map((date, index) => (
+                          <span 
+                            key={index}
+                            className="inline-block px-2 py-1 bg-amber-200 text-amber-800 text-xs rounded font-medium"
+                          >
+                            {formatDate(date)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <p className="text-sm text-amber-700 mt-2">
+                    Deduction applied: AED {payrollData.deductionBreakdown.missingDaysDeduction.toFixed(2)}
+                  </p>
+                </div>
               </div>
             </div>
           </div>

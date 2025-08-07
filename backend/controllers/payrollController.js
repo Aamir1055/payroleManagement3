@@ -106,6 +106,171 @@ const getEmployeeTimingConfig = async (employee) => {
 /* ------------------------------------------------------------------
    FIXED: Attendance metrics with proper approved leave handling
 ------------------------------------------------------------------ */
+// const calculateAttendanceMetrics = async (employee, attRecords, workingDays, approvedLeavesSet = new Set()) => {
+//   const { duty_hours, reporting_time } = await getEmployeeTimingConfig(employee);
+//   const dutyMinutes = Math.round(Number(duty_hours) * 60);
+//   const repMoment = moment(reporting_time, ['HH:mm:ss', 'HH:mm']);
+
+//   let presentDays = 0, halfDays = 0, lateDays = 0;
+//   let dayStatus = [];
+//   let lateRecords = [];
+
+//   console.log(`\n🔄 CALCULATING METRICS for ${employee.employeeId}`);
+//   console.log(`Approved leaves set:`, Array.from(approvedLeavesSet));
+
+//   // Sort records by date for consistent processing
+//   const sortedRecords = attRecords.slice().sort((a, b) => moment(a.date).diff(moment(b.date)));
+
+//   // Process each attendance record
+//   for (const rec of sortedRecords) {
+//     const dateStr = formatDateForDB(rec.date);
+//     const isApprovedLeave = approvedLeavesSet.has(dateStr);
+    
+//     console.log(`Processing date ${dateStr}: approved_leave=${isApprovedLeave}`);
+    
+//     // FIXED: If this date has approved leave, skip attendance processing
+//     if (isApprovedLeave) {
+//       dayStatus.push({ date: dateStr, status: 'AL' }); // Approved Leave
+//       console.log(`  -> Marked as Approved Leave`);
+//       continue;
+//     }
+
+//     const punchInStr = rec.punch_in?.toString().trim();
+//     const punchOutStr = rec.punch_out?.toString().trim();
+    
+//     // Validate punch times with multiple formats
+//     const punchIn = moment(punchInStr, ['HH:mm:ss', 'HH:mm'], true);
+//     const punchOut = moment(punchOutStr, ['HH:mm:ss', 'HH:mm'], true);
+    
+//     // Check for invalid or missing punch data
+//     if (
+//       !punchInStr || !punchOutStr ||
+//       punchInStr === "00:00" || punchOutStr === "00:00" ||
+//       punchInStr === "00:00:00" || punchOutStr === "00:00:00" ||
+//       !punchIn.isValid() || !punchOut.isValid()
+//     ) {
+//       dayStatus.push({ date: dateStr, status: 'A' });
+//       console.log(`  -> Marked as Absent (invalid punch)`);
+//       continue;
+//     }
+
+//     const worked = punchOut.diff(punchIn, 'minutes');
+//     const lateMins = punchIn.diff(repMoment, 'minutes');
+    
+//     // Validate worked time
+//     if (isNaN(worked) || worked <= 0 || worked > 24 * 60) {
+//       dayStatus.push({ date: dateStr, status: 'A' });
+//       console.log(`  -> Marked as Absent (invalid work hours)`);
+//       continue;
+//     }
+
+//     // Employee is present if they have valid punch in/out
+//     presentDays++;
+//     const isLate = lateMins >= 1;
+//     const isFullDay = worked >= dutyMinutes;
+    
+//     if (isLate) {
+//       lateDays++;
+//       lateRecords.push({
+//         date: dateStr,
+//         index: dayStatus.length,
+//         isFullDay
+//       });
+//     }
+    
+//     // Determine status based on work hours and punctuality
+//     let status;
+//     if (isFullDay) {
+//       status = isLate ? 'PL' : 'P'; // Present Late or Present
+//     } else {
+//       halfDays++;
+//       status = isLate ? 'HDL' : 'HD'; // Half Day Late or Half Day
+//     }
+    
+//     dayStatus.push({ date: dateStr, status });
+//     console.log(`  -> Marked as ${status}`);
+//   }
+
+//   // Handle excess late days (convert to half days after 3rd occurrence)
+//   const excessLateRecords = lateRecords.slice(3);
+//   for (const lateRecord of excessLateRecords.reverse()) {
+//     if (dayStatus[lateRecord.index].status === 'PL') {
+//       dayStatus[lateRecord.index].status = 'HDL';
+//       presentDays--;
+//       halfDays++;
+//     }
+//   }
+
+//   // FIXED: Process absent streaks excluding approved leaves
+//   dayStatus.sort((a, b) => moment(a.date).diff(moment(b.date)));
+//   let currStreak = 0;
+//   let absentDaysFinal = 0;
+//   let excessLeaves = 0;
+//   let streakMasks = {};
+
+//   for (let i = 0; i <= dayStatus.length; i++) {
+//     const atEnd = i === dayStatus.length;
+//     const dateStr = !atEnd ? dayStatus[i].date : null;
+    
+//     // FIXED: Only count actual absent days (not approved leaves) in streaks
+//     const isAbsent = !atEnd && dayStatus[i].status === 'A';
+    
+//     if (isAbsent) {
+//       currStreak++;
+//     }
+//     if (!isAbsent || atEnd) {
+//       if (currStreak > 0) {
+//         for (let j = i - currStreak; j < i; j++) {
+//           const currentDate = dayStatus[j].date;
+          
+//           // Original logic: First 2 days in streak = absent, rest = excess leaves
+//           if ((j - (i - currStreak)) < 2) {
+//             absentDaysFinal += 1;
+//             streakMasks[currentDate] = { absent: 1, excess: 0 };
+//           } else {
+//             // This is an excess leave - don't count as absent for display
+//             excessLeaves += 1;
+//             streakMasks[currentDate] = { absent: 0, excess: 1 };
+//           }
+//         }
+//         currStreak = 0;
+//       }
+//     }
+//   }
+  
+//   // FIXED: Count approved leaves separately for display
+//   const approvedLeaveDays = approvedLeavesSet.size;
+  
+//   // Add approved leaves to streak masks for tracking
+//   approvedLeavesSet.forEach(dateStr => {
+//     if (!streakMasks[dateStr]) {
+//       streakMasks[dateStr] = { absent: 1, excess: 0, approved: true };
+//     }
+//   });
+
+//   console.log(`Final metrics:`, {
+//     presentDays,
+//     halfDays,
+//     lateDays,
+//     absentDays: absentDaysFinal,
+//     approvedLeaveDays,
+//     excessLeaves
+//   });
+
+//   return {
+//     presentDays,
+//     halfDays,
+//     lateDays,
+//     absentDays: absentDaysFinal,
+//     approvedLeaveDays,
+//     excessLeaves,
+//     dayStatus,
+//     streakMasks
+//   };
+// };
+
+
+
 const calculateAttendanceMetrics = async (employee, attRecords, workingDays, approvedLeavesSet = new Set()) => {
   const { duty_hours, reporting_time } = await getEmployeeTimingConfig(employee);
   const dutyMinutes = Math.round(Number(duty_hours) * 60);
@@ -128,7 +293,7 @@ const calculateAttendanceMetrics = async (employee, attRecords, workingDays, app
     
     console.log(`Processing date ${dateStr}: approved_leave=${isApprovedLeave}`);
     
-    // FIXED: If this date has approved leave, skip attendance processing
+    // If this date has approved leave, skip attendance processing
     if (isApprovedLeave) {
       dayStatus.push({ date: dateStr, status: 'AL' }); // Approved Leave
       console.log(`  -> Marked as Approved Leave`);
@@ -201,73 +366,86 @@ const calculateAttendanceMetrics = async (employee, attRecords, workingDays, app
     }
   }
 
-  // FIXED: Process absent streaks excluding approved leaves
+  // Sort day status by date for consistent processing
   dayStatus.sort((a, b) => moment(a.date).diff(moment(b.date)));
-  let currStreak = 0;
-  let absentDaysFinal = 0;
-  let excessLeaves = 0;
-  let streakMasks = {};
-
-  for (let i = 0; i <= dayStatus.length; i++) {
-    const atEnd = i === dayStatus.length;
-    const dateStr = !atEnd ? dayStatus[i].date : null;
-    
-    // FIXED: Only count actual absent days (not approved leaves) in streaks
-    const isAbsent = !atEnd && dayStatus[i].status === 'A';
-    
-    if (isAbsent) {
-      currStreak++;
-    }
-    if (!isAbsent || atEnd) {
-      if (currStreak > 0) {
-        for (let j = i - currStreak; j < i; j++) {
-          const currentDate = dayStatus[j].date;
-          
-          // Original logic: First 2 days in streak = absent, rest = excess leaves
-          if ((j - (i - currStreak)) < 2) {
-            absentDaysFinal += 1;
-            streakMasks[currentDate] = { absent: 1, excess: 0 };
-          } else {
-            // This is an excess leave - don't count as absent for display
-            excessLeaves += 1;
-            streakMasks[currentDate] = { absent: 0, excess: 1 };
-          }
-        }
-        currStreak = 0;
-      }
+  
+  // Count actual absent days (invalid punch data only) - these count towards excess leave limit
+  let actualAbsentDays = 0;
+  const absentDates = [];
+  
+  for (const dayEntry of dayStatus) {
+    if (dayEntry.status === 'A') {
+      actualAbsentDays++;
+      absentDates.push(dayEntry.date);
     }
   }
-  
-  // FIXED: Count approved leaves separately for display
+
+  // Count approved leaves separately - these DON'T count towards excess leave limit
   const approvedLeaveDays = approvedLeavesSet.size;
   
-  // Add approved leaves to streak masks for tracking
-  approvedLeavesSet.forEach(dateStr => {
-    if (!streakMasks[dateStr]) {
-      streakMasks[dateStr] = { absent: 1, excess: 0, approved: true };
-    }
-  });
+  console.log(`\n=== ABSENCE BREAKDOWN ===`);
+  console.log(`- Actual absent days (invalid punch): ${actualAbsentDays}`);
+  console.log(`- Approved leave days: ${approvedLeaveDays}`);
+  console.log(`- Total display absent days: ${actualAbsentDays + approvedLeaveDays}`);
 
-  console.log(`Final metrics:`, {
-    presentDays,
-    halfDays,
-    lateDays,
-    absentDays: absentDaysFinal,
-    approvedLeaveDays,
-    excessLeaves
+  // CORE LOGIC: Calculate excess leaves ONLY from actual absent days
+  // Approved leaves NEVER count towards the 2-day tolerance limit
+  let excessLeaves = 0;
+  let regularAbsentDays = actualAbsentDays;
+  
+  if (actualAbsentDays > 2) {
+    excessLeaves = actualAbsentDays - 2;
+    regularAbsentDays = 2; // Only first 2 absent days are regular
+    console.log(`✓ Excess leaves applied: ${excessLeaves} (from ${actualAbsentDays} absent days, limit is 2)`);
+  } else {
+    console.log(`✓ No excess leaves: ${actualAbsentDays} absent days within 2-day limit`);
+  }
+  
+  console.log(`✓ Approved leaves: ${approvedLeaveDays} (never count as excess)`);
+
+  // Create streak masks for tracking and display purposes
+  let streakMasks = {};
+  
+  // Mark approved leaves (always regular, no excess penalty)
+  approvedLeavesSet.forEach(dateStr => {
+    streakMasks[dateStr] = { absent: 1, excess: 0, approved: true };
   });
+  
+  // Mark absent days chronologically (first 2 regular, rest excess)
+  absentDates.sort(); // Ensure chronological order
+  let processedAbsent = 0;
+  for (const dateStr of absentDates) {
+    if (processedAbsent < 2) {
+      streakMasks[dateStr] = { absent: 1, excess: 0 };
+      console.log(`  Date ${dateStr}: Regular absent day (${processedAbsent + 1}/2)`);
+    } else {
+      streakMasks[dateStr] = { absent: 0, excess: 1 };
+      console.log(`  Date ${dateStr}: Excess leave day`);
+    }
+    processedAbsent++;
+  }
+
+  console.log(`\n=== FINAL METRICS ===`);
+  console.log(`Present days: ${presentDays}`);
+  console.log(`Half days: ${halfDays}`);
+  console.log(`Late days: ${lateDays}`);
+  console.log(`Regular absent days: ${regularAbsentDays} (max 2 from actual absent)`);
+  console.log(`Approved leave days: ${approvedLeaveDays} (no excess penalty)`);
+  console.log(`Excess leaves: ${excessLeaves} (only from actual absent days > 2)`);
+  console.log(`========================\n`);
 
   return {
     presentDays,
     halfDays,
     lateDays,
-    absentDays: absentDaysFinal,
+    absentDays: regularAbsentDays, // Only regular absent days (max 2)
     approvedLeaveDays,
-    excessLeaves,
+    excessLeaves, // Only from actual absent days exceeding 2, not from approved leaves
     dayStatus,
     streakMasks
   };
 };
+
 
 /* ------------------------------------------------------------------
    FIXED: Salary & deductions with approved leaves included
