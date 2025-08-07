@@ -11,7 +11,7 @@ const axios = require('axios');
 const fetchWorkingDaysCount = async (year, month) => {
   try {
     const { data } = await axios.get(
-      `http://localhost:${process.env.PORT || 5000}/api/holidays/working-days`,
+      `http://127.0.0.1:${process.env.PORT || 5000}/api/holidays/working-days`,
       { params: { year, month } }
     );
     return data.workingDays ?? 26;
@@ -24,7 +24,7 @@ const fetchWorkingDaysCount = async (year, month) => {
 const fetchWorkingDaysArray = async (year, month) => {
   try {
     const { data } = await axios.get(
-      `http://localhost:${process.env.PORT || 5000}/api/holidays/working-days`,
+      `http://127.0.0.1:${process.env.PORT || 5000}/api/holidays/working-days`,
       { params: { year, month } }
     );
     if (Array.isArray(data.days)) return data.days;

@@ -153,7 +153,7 @@ exports.upload = async (req, res) => {
         const recordDate = new Date(dateStr);
         const year = recordDate.getFullYear();
         const month = recordDate.getMonth() + 1;
-        const { data: holidaysData } = await axios.get(`http://localhost:${process.env.PORT || 5000}/api/holidays/working-days`, { params: { year, month } });
+        const { data: holidaysData } = await axios.get(`http://127.0.0.1:${process.env.PORT || 5000}/api/holidays/working-days`, { params: { year, month } });
         const workingDays = new Set(holidaysData.days || []);
         
         if (!workingDays.has(dateStr)) {
@@ -284,7 +284,7 @@ exports.createOrUpdate = async (req, res) => {
       const recordDate = new Date(date);
       const year = recordDate.getFullYear();
       const month = recordDate.getMonth() + 1;
-      const { data: holidaysData } = await axios.get(`http://localhost:${process.env.PORT || 5000}/api/holidays/working-days`, { params: { year, month } });
+      const { data: holidaysData } = await axios.get(`http://127.0.0.1:${process.env.PORT || 5000}/api/holidays/working-days`, { params: { year, month } });
       const workingDays = new Set(holidaysData.days || []);
       
       if (!workingDays.has(date)) {
